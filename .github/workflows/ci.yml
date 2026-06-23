@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure, build, test
+        run: cmake --workflow --preset check
+
+  fuzz-smoke:
+    name: Fuzz smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      # Clang >= 19 is required: with libstdc++, std::expected is guarded by
+      # __cpp_concepts >= 202002L, which older Clang does not define.
+      - name: Install clang 20 (apt.llvm.org)
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+      - name: Configure
+        run: >
+          cmake -B build-fuzz -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCHELSSY_TESTING=ON
+          -DCHELSSY_ASAN=ON
+          -DCHELSSY_FUZZ=ON
+          -DCMAKE_CXX_COMPILER=clang++-20
+      - name: Build
+        run: cmake --build build-fuzz --target fen_fuzz
+      - name: Run fen_fuzz
+        run: >
+          mkdir corpus_work;
+          ./build-fuzz/tests/Fuzz/Fen/fen_fuzz
+          corpus_work
+          tests/Fuzz/Fen/corpus
+          -dict=tests/Fuzz/Fen/Fen.dict
+          -max_total_time=60
+          -print_final_stats=1
