@@ -1,0 +1,2 @@
+---
+Checks: "llvm-*, modernize-*, readability-*, -readability-identifier-naming"
