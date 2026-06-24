@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.28)
 project(chelssy VERSION 0.1.0 LANGUAGES CXX)
 
-if(NOT DEFINED CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 23)
-endif()
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(third_party)
 
