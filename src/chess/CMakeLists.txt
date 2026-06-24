@@ -1,0 +1,1 @@
+target_sources(chelssy_core PRIVATE board.cpp)
