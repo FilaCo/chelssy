@@ -5,4 +5,5 @@ function(chelssy_add_fuzz_target name)
   target_link_options(${name} PRIVATE -fsanitize=fuzzer)
 endfunction()
 
+add_subdirectory(Board)
 add_subdirectory(Fen)

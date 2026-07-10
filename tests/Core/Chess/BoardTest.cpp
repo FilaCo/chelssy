@@ -46,9 +46,8 @@ void expectMailboxMatchesPieceLists(const Board &board) {
   }
 
   size_t occupiedTotal = 0;
-  // The whole 0x88 mailbox; off-board indices are skipped.
-  for (uint16_t idx = 0; idx < 0x80; ++idx) {
-    const auto sqr = Square::fromIndex(static_cast<uint8_t>(idx));
+  for (uint8_t idx = 0; idx < 0x80; ++idx) {
+    const auto sqr = Square::fromIndex(idx);
     if (sqr.isInvalid()) {
       continue;
     }

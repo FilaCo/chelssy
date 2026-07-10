@@ -122,7 +122,7 @@ private:
   /// @note 0..MoveCounterMax
   uint16_t moveCounter_;
 
-  static constexpr uint8_t mailboxSize = 128;
+  static constexpr uint8_t mailboxSize = 0x80;
   std::array<Piece, mailboxSize> mailbox_;
 
   // Slot 0 is PieceKind::None; never read, empty squares are skipped

@@ -18,8 +18,18 @@ jobs:
         run: cmake --workflow --preset check
 
   fuzz-smoke:
-    name: Fuzz smoke
+    name: Fuzz smoke (${{ matrix.target }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: fen_fuzz
+            binary: build-fuzz/tests/Fuzz/Fen/fen_fuzz
+            seeds: tests/Fuzz/Fen/corpus
+          - target: board_fuzz
+            binary: build-fuzz/tests/Fuzz/Board/board_fuzz
+            seeds: tests/Fuzz/Board/corpus tests/Fuzz/Fen/corpus
     steps:
       - uses: actions/checkout@v4
       - name: Install ninja
@@ -40,13 +50,23 @@ jobs:
           -DCHELSSY_FUZZ=ON
           -DCMAKE_CXX_COMPILER=clang++-20
       - name: Build
-        run: cmake --build build-fuzz --target fen_fuzz
-      - name: Run fen_fuzz
+        run: cmake --build build-fuzz --target ${{ matrix.target }}
+      - name: Run ${{ matrix.target }}
         run: >
           mkdir corpus_work;
-          ./build-fuzz/tests/Fuzz/Fen/fen_fuzz
+          ./${{ matrix.binary }}
           corpus_work
-          tests/Fuzz/Fen/corpus
+          ${{ matrix.seeds }}
           -dict=tests/Fuzz/Fen/Fen.dict
           -max_total_time=60
           -print_final_stats=1
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-crashes
+          path: |
+            crash-*
+            oom-*
+            timeout-*
+          if-no-files-found: ignore

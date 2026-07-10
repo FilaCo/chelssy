@@ -1,0 +1,1 @@
+chelssy_add_fuzz_target(board_fuzz BoardFuzz.cpp)
