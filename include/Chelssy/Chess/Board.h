@@ -101,10 +101,9 @@ struct Board {
     return mailbox_[sqr.index()];
   }
 
-  [[nodiscard]] constexpr auto squares(const Color color,
-                                       const PieceKind kind) const noexcept
+  [[nodiscard]] constexpr auto squares(const Piece piece) const noexcept
       -> std::span<const Square> {
-    return pieceLists_.squares(color, kind);
+    return pieceLists_.squares(piece);
   }
 
   // constexpr void doPly(const Ply ply, Undo &undo) noexcept {}

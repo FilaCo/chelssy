@@ -32,9 +32,11 @@ void expectMailboxMatchesPieceLists(const Board &board) {
   size_t listedTotal = 0;
   for (uint8_t colorIdx = 0; colorIdx < colorsCount; ++colorIdx) {
     const auto color = static_cast<Color>(colorIdx);
-    for (uint8_t kindIdx = 0; kindIdx < pieceKindsCount; ++kindIdx) {
+    for (auto kindIdx = std::to_underlying(PieceKind::Pawn);
+         kindIdx < pieceKindsCount; ++kindIdx) {
       const auto kind = static_cast<PieceKind>(kindIdx);
-      const auto listed = board.squares(color, kind);
+      const auto piece = makePiece(color, kind);
+      const auto listed = board.squares(piece);
       for (const auto sqr : listed) {
         ASSERT_TRUE(sqr.isValid());
         EXPECT_EQ(makePiece(color, kind), board.pieceAt(sqr));
@@ -55,7 +57,7 @@ void expectMailboxMatchesPieceLists(const Board &board) {
       continue;
     }
     ++occupiedTotal;
-    const auto listed = board.squares(getColor(piece), getKind(piece));
+    const auto listed = board.squares(piece);
     EXPECT_NE(std::ranges::find(listed, sqr), listed.end())
         << "square is occupied but not listed";
   }
@@ -94,9 +96,11 @@ TEST(BoardFromFenTest, startingPositionPieceCounts) {
   ASSERT_TRUE(board.has_value());
   for (uint8_t colorIdx = 0; colorIdx < colorsCount; ++colorIdx) {
     const auto color = static_cast<Color>(colorIdx);
-    for (uint8_t kindIdx = 0; kindIdx < pieceKindsCount; ++kindIdx) {
+    for (auto kindIdx = std::to_underlying(PieceKind::Pawn);
+         kindIdx < pieceKindsCount; ++kindIdx) {
       const auto kind = static_cast<PieceKind>(kindIdx);
-      EXPECT_EQ(expectedCounts[kindIdx], board->squares(color, kind).size());
+      const auto piece = makePiece(color, kind);
+      EXPECT_EQ(expectedCounts[kindIdx], board->squares(piece).size());
     }
   }
 }
@@ -126,7 +130,7 @@ TEST(BoardSquaresTest, startingPositionWhitePawnSquares) {
 
   // assert
   ASSERT_TRUE(board.has_value());
-  const auto pawns = board->squares(Color::White, PieceKind::Pawn);
+  const auto pawns = board->squares(Piece::WhitePawn);
   std::array<Square, expected.size()> actual{};
   ASSERT_EQ(expected.size(), pawns.size());
   std::ranges::copy(pawns, actual.begin());
