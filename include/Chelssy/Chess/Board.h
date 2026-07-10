@@ -98,6 +98,7 @@ struct Board {
 
   [[nodiscard]] constexpr auto pieceAt(const Square sqr) const noexcept
       -> Piece {
+    assert(sqr.index() < mailboxSize && "sqr index is out of bounds");
     return mailbox_[sqr.index()];
   }
 
@@ -174,7 +175,6 @@ private:
       pieceLists.add(piece, sqr);
       mailbox[idx] = piece;
     }
-
     if (pieceLists.count(Piece::WhiteKing) == 0 ||
         pieceLists.count(Piece::BlackKing) == 0) {
       return Error::KingMissing;

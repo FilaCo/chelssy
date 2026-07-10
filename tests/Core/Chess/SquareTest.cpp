@@ -214,8 +214,9 @@ TEST(SquareTest, shiftedInverseRestoresSquare) {
     for (uint8_t rank = 0; rank <= rankMax; ++rank) {
       const Square sqr{file, rank};
       for (const auto offset : offsets) {
-        EXPECT_EQ(sqr, sqr.shifted(offset).shifted(-offset));
-        EXPECT_EQ(sqr, sqr.shifted(-offset).shifted(offset));
+        const auto negOffset = static_cast<int8_t>(-offset);
+        EXPECT_EQ(sqr, sqr.shifted(offset).shifted(negOffset));
+        EXPECT_EQ(sqr, sqr.shifted(negOffset).shifted(offset));
       }
     }
   }

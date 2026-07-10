@@ -311,7 +311,8 @@ struct Square {
       -> bool = default;
 
   /// Raw 0x88 index. `0..0x77` for valid squares; mailbox arrays must be
-  /// 128 entries to be indexable by any representable square.
+  /// 128 entries to be indexable by any square whose rank-overflow bit is
+  /// clear; always check isValid() before mailbox access.
   [[nodiscard]] constexpr auto index() const noexcept -> uint8_t {
     return inner_;
   }
