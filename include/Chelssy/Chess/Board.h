@@ -249,9 +249,9 @@ private:
       Error::TooManyBishops, Error::TooManyRooks, Error::TooManyQueens,
       Error::TooManyKings};
 
-  static constexpr std::array<CastlingRights, chessboardSize> castlingMasks =
-      []() -> std::array<CastlingRights, chessboardSize> {
-    std::array<CastlingRights, chessboardSize> masks{};
+  using CastlingMasks = std::array<CastlingRights, chessboardSize>;
+  static constexpr auto castlingMasks = []() -> CastlingMasks {
+    CastlingMasks masks{};
     masks.fill(CastlingRights::All);
     masks[Square::fromStr("a1").to8x8()] = ~CastlingRights::WhiteQueen;
     masks[Square::fromStr("h1").to8x8()] = ~CastlingRights::WhiteKing;

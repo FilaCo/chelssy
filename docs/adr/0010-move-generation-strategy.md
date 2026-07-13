@@ -28,8 +28,11 @@ detection. Reasons, given the target:
 
 ## Consequences
 
-- The Board move is reversible: `apply(Ply) -> Undo` plus `undo(Undo)`, alongside
-  the queries.
+- The Board move is reversible: `doPly(Ply, Undo &)` records the irreversible
+  state (castling rights, en-passant square, ply clock, captured piece) into a
+  caller-provided record, and `undoPly(Ply, const Undo &)` restores it. The
+  caller owns the undo records, so search keeps them in its own depth-bounded
+  stack instead of the board allocating anything.
 
 ## Future work
 

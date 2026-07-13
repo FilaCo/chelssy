@@ -31,7 +31,7 @@ static_assert(Color::Black == flip(Color::White));
 /// Piece kind combined with its color.
 ///
 /// 0..2 bits encode a piece kind.
-/// 3 bit encodes a color.
+/// 3rd bit encodes a color.
 enum class Piece : uint8_t {
   /// Represents empty square.
   None = 0b0000,
