@@ -2,22 +2,36 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "host-debug",
-      "displayName": "Host: Debug + ASan/UBSan + tests",
+      "name": "base",
+      "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Debug + ASan/UBSan + tests",
+      "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CHELSSY_TESTING": "ON",
         "CHELSSY_ASAN": "ON"
       }
     },
     {
-      "name": "host-coverage",
-      "displayName": "Host: Debug + tests + coverage reports",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-coverage",
+      "name": "lint",
+      "displayName": "dev + clang-tidy during compilation",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CHELSSY_LINT": "ON"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Tests + coverage reports",
+      "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CHELSSY_TESTING": "ON",
@@ -25,10 +39,9 @@
       }
     },
     {
-      "name": "fuzz-base",
-      "hidden": true,
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-fuzz",
+      "name": "fuzz",
+      "displayName": "libFuzzer + ASan (needs LLVM Clang)",
+      "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "CHELSSY_TESTING": "ON",
@@ -39,24 +52,37 @@
   ],
   "buildPresets": [
     {
-      "name": "host-debug",
-      "configurePreset": "host-debug"
+      "name": "dev",
+      "configurePreset": "dev"
     },
     {
-      "name": "host-coverage-run",
-      "configurePreset": "host-coverage",
+      "name": "lint",
+      "configurePreset": "lint"
+    },
+    {
+      "name": "fmt",
+      "configurePreset": "dev",
+      "targets": ["format"]
+    },
+    {
+      "name": "coverage-run",
+      "configurePreset": "coverage",
       "targets": ["ccov-all-run"]
     },
     {
-      "name": "host-coverage-report",
-      "configurePreset": "host-coverage",
+      "name": "coverage-report",
+      "configurePreset": "coverage",
       "targets": ["ccov-all", "ccov-all-report"]
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz"
     }
   ],
   "testPresets": [
     {
-      "name": "host-debug",
-      "configurePreset": "host-debug",
+      "name": "dev",
+      "configurePreset": "dev",
       "output": {
         "outputOnFailure": true
       }
@@ -64,39 +90,47 @@
   ],
   "workflowPresets": [
     {
-      "name": "check",
-      "displayName": "Configure + build + run unit tests",
+      "name": "build",
       "steps": [
-        {
-          "type": "configure",
-          "name": "host-debug"
-        },
-        {
-          "type": "build",
-          "name": "host-debug"
-        },
-        {
-          "type": "test",
-          "name": "host-debug"
-        }
+        { "type": "configure", "name": "dev" },
+        { "type": "build", "name": "dev" }
+      ]
+    },
+    {
+      "name": "test",
+      "steps": [
+        { "type": "configure", "name": "dev" },
+        { "type": "build", "name": "dev" },
+        { "type": "test", "name": "dev" }
+      ]
+    },
+    {
+      "name": "lint",
+      "steps": [
+        { "type": "configure", "name": "lint" },
+        { "type": "build", "name": "lint" }
+      ]
+    },
+    {
+      "name": "fmt",
+      "steps": [
+        { "type": "configure", "name": "dev" },
+        { "type": "build", "name": "fmt" }
       ]
     },
     {
       "name": "coverage",
-      "displayName": "Configure + run tests + generate coverage report",
       "steps": [
-        {
-          "type": "configure",
-          "name": "host-coverage"
-        },
-        {
-          "type": "build",
-          "name": "host-coverage-run"
-        },
-        {
-          "type": "build",
-          "name": "host-coverage-report"
-        }
+        { "type": "configure", "name": "coverage" },
+        { "type": "build", "name": "coverage-run" },
+        { "type": "build", "name": "coverage-report" }
+      ]
+    },
+    {
+      "name": "fuzz",
+      "steps": [
+        { "type": "configure", "name": "fuzz" },
+        { "type": "build", "name": "fuzz" }
       ]
     }
   ]

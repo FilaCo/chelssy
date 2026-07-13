@@ -1,5 +1,5 @@
-#include "BoardAssertions.h"
 #include "Chelssy/Chess/Board.h"
+#include "BoardAssertions.h"
 #include "Printing.h" // IWYU pragma: keep
 #include <gtest/gtest.h>
 
@@ -70,10 +70,10 @@ TEST(BoardFromFenTest, fenFieldsReachBoard) {
 
 TEST(BoardSquaresTest, startingPositionWhitePawnSquares) {
   // arrange
-  constexpr std::array expected{
-      Square::fromStr("a2"), Square::fromStr("b2"), Square::fromStr("c2"),
-      Square::fromStr("d2"), Square::fromStr("e2"), Square::fromStr("f2"),
-      Square::fromStr("g2"), Square::fromStr("h2")};
+  constexpr std::array expected{Square::fromStr("a2"), Square::fromStr("b2"),
+                                Square::fromStr("c2"), Square::fromStr("d2"),
+                                Square::fromStr("e2"), Square::fromStr("f2"),
+                                Square::fromStr("g2"), Square::fromStr("h2")};
 
   // act
   const auto board = Board::fromFen(Fen::startingPosition());
