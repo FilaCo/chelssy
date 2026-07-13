@@ -28,7 +28,7 @@ void checkMailboxMatchesPieceLists(const Board &board) {
   }
 
   size_t occupiedTotal = 0;
-  for (uint8_t idx = 0; idx < 0x80; ++idx) {
+  for (uint8_t idx = 0; idx < mailboxSize; ++idx) {
     const auto sqr = Square::fromIndex(idx);
     if (sqr.isInvalid()) {
       continue;
@@ -59,7 +59,7 @@ void checkBoardMatchesFen(const Board &board, const Fen &fen) {
     __builtin_trap();
   }
 
-  for (uint8_t idx = 0; idx < 0x80; ++idx) {
+  for (uint8_t idx = 0; idx < mailboxSize; ++idx) {
     const auto sqr = Square::fromIndex(idx);
     if (sqr.isValid() && board.pieceAt(sqr) != fen.piecePlacement().at(sqr)) {
       __builtin_trap();

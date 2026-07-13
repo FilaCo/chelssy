@@ -572,9 +572,6 @@ private:
     static_assert(syms[std::countr_zero(
                       std::to_underlying(CastlingRights::BlackQueen))] == 'q');
 
-    assert(castlingAbility_ != CastlingRights::End &&
-           "unexpected castling_rights_t sentinel value");
-
     auto hasAnyRights = false;
     for (size_t i = 0; i < syms.size(); ++i) {
       if (const auto cur = static_cast<CastlingRights>(1 << i);

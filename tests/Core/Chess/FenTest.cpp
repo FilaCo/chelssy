@@ -221,3 +221,36 @@ TEST(FenToCharsTest, bufferOneCharShort) {
   // assert
   EXPECT_EQ(std::errc::value_too_large, ec);
 }
+
+TEST(FenToCharsTest, everyTruncatedBufferReportsValueTooLarge) {
+  // arrange
+  // Each prefix length fails in a different serializer stage, so together
+  // these sweep every value_too_large branch in the toChars family.
+  constexpr std::array<std::string_view, 3> inputs{
+      Fen::startingPositionStr,
+      // en passant square set, multi-digit counters
+      "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 10 21",
+      // no castling rights, no en passant
+      "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+  };
+
+  for (const auto input : inputs) {
+    const auto fen = Fen::parse(input);
+    ASSERT_TRUE(fen.has_value());
+    std::array<char, Fen::strLengthMax> buf{};
+    for (size_t len = 0; len < input.size(); ++len) {
+      // act
+      const auto [ptr, ec] = fen->toChars(buf.data(), buf.data() + len);
+
+      // assert
+      EXPECT_EQ(std::errc::value_too_large, ec)
+          << "input " << input << ", buffer length " << len;
+      EXPECT_LE(ptr, buf.data() + len);
+    }
+  }
+}
+
+TEST(FenPiecePlacementTest, startingPositionMatchesParsedPlacement) {
+  EXPECT_EQ(Fen::startingPosition().piecePlacement(),
+            Fen::PiecePlacement::startingPosition());
+}

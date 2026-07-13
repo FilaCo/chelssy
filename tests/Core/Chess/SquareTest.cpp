@@ -9,8 +9,14 @@
 
 using namespace Chelssy::Chess;
 
+TEST(SquareTest, defaultConstructedIsInvalid) {
+  const Square sqr{};
+  EXPECT_TRUE(sqr.isInvalid());
+  EXPECT_EQ(Square::none(), sqr);
+}
+
 TEST(SquareTest, printToUsesAlgebraicNotation) {
-  EXPECT_EQ("f5", testing::PrintToString(Square{5, 4}));
+  EXPECT_EQ("f5", testing::PrintToString(Square::fromStr("f5")));
 }
 
 static_assert(Square(4, 3) == Square::fromIndex(0x34));
@@ -97,74 +103,74 @@ struct ShiftedOffBoardTestParam {
 
 TEST(SquareTest, shiftedGeometryOnBoard) {
   // arrange
-  constexpr Square e4{4, 3};
-  constexpr Square d4{3, 3};
+  constexpr Square e4 = Square::fromStr("e4");
+  constexpr Square d4 = Square::fromStr("d4");
   constexpr std::array cases{
       ShiftedTestParam{.name = "e4_north_is_e5",
                        .from = e4,
-                       .offset = 0x10,
-                       .expected = Square{4, 4}},
+                       .offset = Square::north,
+                       .expected = Square::fromStr("e5")},
       ShiftedTestParam{.name = "e4_south_is_e3",
                        .from = e4,
-                       .offset = -0x10,
-                       .expected = Square{4, 2}},
+                       .offset = Square::south,
+                       .expected = Square::fromStr("e3")},
       ShiftedTestParam{.name = "e4_east_is_f4",
                        .from = e4,
-                       .offset = 0x01,
-                       .expected = Square{5, 3}},
+                       .offset = Square::east,
+                       .expected = Square::fromStr("f4")},
       ShiftedTestParam{.name = "e4_west_is_d4",
                        .from = e4,
-                       .offset = -0x01,
-                       .expected = Square{3, 3}},
+                       .offset = Square::west,
+                       .expected = Square::fromStr("d4")},
       ShiftedTestParam{.name = "e4_north_east_is_f5",
                        .from = e4,
-                       .offset = 0x11,
-                       .expected = Square{5, 4}},
+                       .offset = Square::northEast,
+                       .expected = Square::fromStr("f5")},
       ShiftedTestParam{.name = "e4_south_west_is_d3",
                        .from = e4,
-                       .offset = -0x11,
-                       .expected = Square{3, 2}},
+                       .offset = Square::southWest,
+                       .expected = Square::fromStr("d3")},
       ShiftedTestParam{.name = "e4_north_west_is_d5",
                        .from = e4,
-                       .offset = 0x0F,
-                       .expected = Square{3, 4}},
+                       .offset = Square::northWest,
+                       .expected = Square::fromStr("d5")},
       ShiftedTestParam{.name = "e4_south_east_is_f3",
                        .from = e4,
-                       .offset = -0x0F,
-                       .expected = Square{5, 2}},
+                       .offset = Square::southEast,
+                       .expected = Square::fromStr("f3")},
       // all 8 knight jumps from d4
       ShiftedTestParam{.name = "d4_knight_e6",
                        .from = d4,
-                       .offset = 0x21,
-                       .expected = Square{4, 5}},
+                       .offset = Square::northNorthEast,
+                       .expected = Square::fromStr("e6")},
       ShiftedTestParam{.name = "d4_knight_c6",
                        .from = d4,
-                       .offset = 0x1F,
-                       .expected = Square{2, 5}},
+                       .offset = Square::northNorthWest,
+                       .expected = Square::fromStr("c6")},
       ShiftedTestParam{.name = "d4_knight_f5",
                        .from = d4,
-                       .offset = 0x12,
-                       .expected = Square{5, 4}},
+                       .offset = Square::eastNorthEast,
+                       .expected = Square::fromStr("f5")},
       ShiftedTestParam{.name = "d4_knight_b5",
                        .from = d4,
-                       .offset = 0x0E,
-                       .expected = Square{1, 4}},
+                       .offset = Square::westNorthWest,
+                       .expected = Square::fromStr("b5")},
       ShiftedTestParam{.name = "d4_knight_c2",
                        .from = d4,
-                       .offset = -0x21,
-                       .expected = Square{2, 1}},
+                       .offset = Square::southSouthWest,
+                       .expected = Square::fromStr("c2")},
       ShiftedTestParam{.name = "d4_knight_e2",
                        .from = d4,
-                       .offset = -0x1F,
-                       .expected = Square{4, 1}},
+                       .offset = Square::southSouthEast,
+                       .expected = Square::fromStr("e2")},
       ShiftedTestParam{.name = "d4_knight_b3",
                        .from = d4,
-                       .offset = -0x12,
-                       .expected = Square{1, 2}},
+                       .offset = Square::westSouthWest,
+                       .expected = Square::fromStr("b3")},
       ShiftedTestParam{.name = "d4_knight_f3",
                        .from = d4,
-                       .offset = -0x0E,
-                       .expected = Square{5, 2}},
+                       .offset = Square::eastSouthEast,
+                       .expected = Square::fromStr("f3")},
   };
 
   for (const auto &[name, from, offset, expected] : cases) {
@@ -182,22 +188,30 @@ TEST(SquareTest, shiftedGeometryOnBoard) {
 TEST(SquareTest, shiftedFallsOffBoard) {
   // arrange
   constexpr std::array cases{
-      ShiftedOffBoardTestParam{
-          .name = "h4_east", .from = Square{7, 3}, .offset = 0x01},
-      ShiftedOffBoardTestParam{
-          .name = "a4_west", .from = Square{0, 3}, .offset = -0x01},
-      ShiftedOffBoardTestParam{
-          .name = "e8_north", .from = Square{4, 7}, .offset = 0x10},
-      ShiftedOffBoardTestParam{
-          .name = "e1_south", .from = Square{4, 0}, .offset = -0x10},
-      ShiftedOffBoardTestParam{
-          .name = "h8_north_east", .from = Square{7, 7}, .offset = 0x11},
-      ShiftedOffBoardTestParam{
-          .name = "a1_south_west", .from = Square{0, 0}, .offset = -0x11},
-      ShiftedOffBoardTestParam{
-          .name = "b1_knight_down", .from = Square{1, 0}, .offset = -0x21},
-      ShiftedOffBoardTestParam{
-          .name = "g1_knight_down", .from = Square{6, 0}, .offset = -0x1F},
+      ShiftedOffBoardTestParam{.name = "h4_east",
+                               .from = Square::fromStr("h4"),
+                               .offset = Square::east},
+      ShiftedOffBoardTestParam{.name = "a4_west",
+                               .from = Square::fromStr("a4"),
+                               .offset = Square::west},
+      ShiftedOffBoardTestParam{.name = "e8_north",
+                               .from = Square::fromStr("e8"),
+                               .offset = Square::north},
+      ShiftedOffBoardTestParam{.name = "e1_south",
+                               .from = Square::fromStr("e1"),
+                               .offset = Square::south},
+      ShiftedOffBoardTestParam{.name = "h8_north_east",
+                               .from = Square::fromStr("h8"),
+                               .offset = Square::northEast},
+      ShiftedOffBoardTestParam{.name = "a1_south_west",
+                               .from = Square::fromStr("a1"),
+                               .offset = Square::southWest},
+      ShiftedOffBoardTestParam{.name = "b1_knight_down",
+                               .from = Square::fromStr("b1"),
+                               .offset = Square::southSouthWest},
+      ShiftedOffBoardTestParam{.name = "g1_knight_down",
+                               .from = Square::fromStr("g1"),
+                               .offset = Square::southSouthEast},
   };
 
   for (const auto &[name, from, offset] : cases) {
@@ -208,8 +222,10 @@ TEST(SquareTest, shiftedFallsOffBoard) {
 
 TEST(SquareTest, shiftedInverseRestoresSquare) {
   // Every step offset used by move generation, in one direction.
-  constexpr std::array<int8_t, 8> offsets{0x01, 0x10, 0x11, 0x0F,
-                                          0x21, 0x1F, 0x12, 0x0E};
+  constexpr std::array<int8_t, 8> offsets{
+      Square::east,          Square::north,          Square::northEast,
+      Square::northWest,     Square::northNorthEast, Square::northNorthWest,
+      Square::eastNorthEast, Square::westNorthWest};
   for (uint8_t file = 0; file <= fileMax; ++file) {
     for (uint8_t rank = 0; rank <= rankMax; ++rank) {
       const Square sqr{file, rank};
@@ -224,7 +240,7 @@ TEST(SquareTest, shiftedInverseRestoresSquare) {
 
 TEST(SquareTest, invalidSquareIsNotNecessarilyNone) {
   // act: fall off the board next to h4
-  const auto offBoard = Square{7, 3}.shifted(0x01);
+  const auto offBoard = Square::fromStr("h4").shifted(Square::east);
 
   // assert: invalid, yet distinct from the none() sentinel
   ASSERT_TRUE(offBoard.isInvalid());

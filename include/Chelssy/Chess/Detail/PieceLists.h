@@ -24,11 +24,12 @@ struct PieceLists {
 
   /// @pre `sqr.isValid() == true`
   constexpr void add(const Piece piece, const Square sqr) noexcept {
-    assert(sqr.isValid());
+    assert(sqr.isValid() && "invalid piece position");
     const auto color = getColorIdx(piece);
     const auto kind = getKindIdx(piece);
 
     auto &cnt = counts_[color][kind];
+    assert(cnt < pieceListCapacity && "piece count exceeded");
     sqrs_[color][kind][cnt] = sqr;
     const auto sqr8x8 = sqr.to8x8();
     indexBoard_[sqr8x8] = cnt;
@@ -41,8 +42,8 @@ struct PieceLists {
   /// the capturer.
   constexpr void move(const Piece piece, const Square from,
                       const Square to) noexcept {
-    assert(from.isValid() && "from square is invalid");
-    assert(to.isValid() && "to square is invalid");
+    assert(from.isValid() && "`from` square is invalid");
+    assert(to.isValid() && "`to` square is invalid");
 
     const auto idx = indexBoard_[from.to8x8()];
     const auto colorIdx = getColorIdx(piece);
@@ -64,6 +65,7 @@ struct PieceLists {
     assert(sqrs_[colorIdx][kindIdx][idx] == sqr && "piece is not on the board");
 
     auto &cnt = counts_[colorIdx][kindIdx];
+    assert(cnt > 0 && "can't remove piece that doesn't exist");
     --cnt;
 
     auto &lastSqr = sqrs_[colorIdx][kindIdx][cnt];

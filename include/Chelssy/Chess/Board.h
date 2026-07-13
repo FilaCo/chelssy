@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Chelssy/Chess/Consts.h"
-#include "Chelssy/Chess/Detail/PieceLists.h"
+#include "Consts.h"
+#include "Detail/PieceLists.h"
 #include "Fen.h"
 #include "Types.h"
 #include <cstddef>
@@ -33,22 +33,22 @@ struct Board {
     InvalidCastlingRights,
     InvalidEnPassantTargetSquare,
     NonZeroPlyClockWithEnPassant,
+    TooManyPromotedPieces,
   };
 
   Board() = delete;
 
   /// Builds a board from a syntactically valid FEN, rejecting positions
-  /// that break board invariants or static chess legality; the validation
-  /// helpers below document the exact rules.
-  ///
-  /// @note Checks that require attack detection (the side not to move must
-  /// not be in check) are deferred until the ply generator lands.
+  /// that break board invariants or static chess legality.
   [[nodiscard]] static constexpr auto fromFen(const Fen &fen) noexcept
       -> std::expected<Board, Error> {
     std::array<Piece, mailboxSize> mailbox{};
     Detail::PieceLists pieceLists;
     if (const auto err =
             fillPlacement(fen.piecePlacement(), mailbox, pieceLists)) {
+      return std::unexpected(*err);
+    }
+    if (const auto err = validatePromotionBudget(pieceLists)) {
       return std::unexpected(*err);
     }
     if (const auto err =
@@ -85,13 +85,10 @@ struct Board {
     return epSqr_;
   }
 
-  /// Plies since the last capture or pawn move (the fifty-move rule
-  /// counter).
   [[nodiscard]] constexpr auto plyClock() const noexcept -> uint8_t {
     return plyClock_;
   }
 
-  /// Full move counter; starts at 1, increments after each black ply.
   [[nodiscard]] constexpr auto moveCounter() const noexcept -> uint16_t {
     return moveCounter_;
   }
@@ -107,32 +104,181 @@ struct Board {
     return pieceLists_.squares(piece);
   }
 
-  // constexpr void doPly(const Ply ply, Undo &undo) noexcept {}
+  /// Applies a ply and records the irreversible state in `undo`.
+  ///
+  /// @pre `ply` is semi-legal for this position
+  /// @note `undo.prev` is untouched.
+  /// @note plyClock may exceed plyClockMax during play; draw adjudication
+  /// is the caller's job.
+  constexpr void doPly(const Ply ply, Undo &undo) noexcept {
+    using PlyFlag = Ply::Flag;
+    const auto from = ply.from();
+    const auto to = ply.to();
+    const auto flag = ply.flag();
+    const auto mover = pieceAt(from);
+    assert(mover != Piece::None && getColor(mover) == sideToMove_ &&
+           "no own piece on the from square");
 
-  // constexpr void undoPly(const Ply ply, const Undo &undo) noexcept {}
+    undo.castlingRights = castlingRights_;
+    undo.epSqr = epSqr_;
+    undo.plyClock = plyClock_;
+    undo.captured = Piece::None;
+
+    // The captured piece leaves first.
+    if (ply.isCapture()) {
+      const auto capturedSqr = flag == PlyFlag::EnPassantCapture
+                                   ? to.shiftedBackwards(sideToMove_)
+                                   : to;
+      const auto captured = pieceAt(capturedSqr);
+      assert(captured != Piece::None &&
+             getColor(captured) == flip(sideToMove_) &&
+             "no enemy piece on the capture square");
+      assert(getKind(captured) != PieceKind::King && "king capture");
+      undo.captured = captured;
+      pieceLists_.remove(captured, capturedSqr);
+      mailbox_[capturedSqr.index()] = Piece::None;
+    }
+    assert(pieceAt(to) == Piece::None && "`to` square is occupied");
+
+    mailbox_[from.index()] = Piece::None;
+    if (ply.isPromotion()) {
+      const auto promoted = makePiece(sideToMove_, ply.promoKind());
+      pieceLists_.remove(mover, from);
+      pieceLists_.add(promoted, to);
+      mailbox_[to.index()] = promoted;
+    } else {
+      pieceLists_.move(mover, from, to);
+      mailbox_[to.index()] = mover;
+    }
+
+    if (flag == PlyFlag::KingCastle || flag == PlyFlag::QueenCastle) {
+      const auto [rookFrom, rookTo] = castleRookSquares(flag, to.rank());
+      const auto rook = makePiece(sideToMove_, PieceKind::Rook);
+      assert(pieceAt(rookFrom) == rook && "rook is not on its castling square");
+      pieceLists_.move(rook, rookFrom, rookTo);
+      mailbox_[rookFrom.index()] = Piece::None;
+      mailbox_[rookTo.index()] = rook;
+    }
+
+    castlingRights_ &= castlingMasks[from.to8x8()] & castlingMasks[to.to8x8()];
+    epSqr_ = flag == PlyFlag::DoublePawnPush ? to.shiftedBackwards(sideToMove_)
+                                             : Square::none();
+    plyClock_ = ply.isCapture() || getKind(mover) == PieceKind::Pawn
+                    ? 0
+                    : static_cast<uint8_t>(plyClock_ + 1);
+    if (sideToMove_ == Color::Black) {
+      ++moveCounter_;
+    }
+    sideToMove_ = flip(sideToMove_);
+  }
+
+  constexpr void undoPly(const Ply ply, const Undo &undo) noexcept {
+    using PlyFlag = Ply::Flag;
+    sideToMove_ = flip(sideToMove_);
+    if (sideToMove_ == Color::Black) {
+      --moveCounter_;
+    }
+    castlingRights_ = undo.castlingRights;
+    epSqr_ = undo.epSqr;
+    plyClock_ = undo.plyClock;
+
+    const auto from = ply.from();
+    const auto to = ply.to();
+    const auto flag = ply.flag();
+
+    if (ply.isPromotion()) {
+      const auto promoted = makePiece(sideToMove_, ply.promoKind());
+      const auto pawn = makePiece(sideToMove_, PieceKind::Pawn);
+      assert(pieceAt(to) == promoted &&
+             "promoted piece is not on the to square");
+      pieceLists_.remove(promoted, to);
+      pieceLists_.add(pawn, from);
+      mailbox_[from.index()] = pawn;
+    } else {
+      const auto mover = pieceAt(to);
+      assert(mover != Piece::None && getColor(mover) == sideToMove_ &&
+             "no own piece on the to square");
+      pieceLists_.move(mover, to, from);
+      mailbox_[from.index()] = mover;
+    }
+    mailbox_[to.index()] = Piece::None;
+
+    if (flag == PlyFlag::KingCastle || flag == PlyFlag::QueenCastle) {
+      const auto [rookFrom, rookTo] = castleRookSquares(flag, to.rank());
+      const auto rook = makePiece(sideToMove_, PieceKind::Rook);
+      assert(pieceAt(rookTo) == rook && "rook is not on its castled square");
+      pieceLists_.move(rook, rookTo, rookFrom);
+      mailbox_[rookTo.index()] = Piece::None;
+      mailbox_[rookFrom.index()] = rook;
+    }
+
+    if (undo.captured != Piece::None) {
+      const auto capturedSqr = flag == PlyFlag::EnPassantCapture
+                                   ? to.shiftedBackwards(sideToMove_)
+                                   : to;
+      pieceLists_.add(undo.captured, capturedSqr);
+      mailbox_[capturedSqr.index()] = undo.captured;
+    }
+  }
 
 private:
+  static constexpr uint8_t plyClockMax = 100;
+  static constexpr uint16_t moveCounterMin = 1;
+  static constexpr uint16_t moveCounterMax = 8850;
+
   Color sideToMove_;
   CastlingRights castlingRights_;
   /// En-passant target square.
   Square epSqr_;
-  /// @note 0..PlyClockMax
+  /// @note 0..plyClockMax
   /// @note Resets on moving pawn or taking a piece.
   uint8_t plyClock_;
-  /// @note 0..MoveCounterMax
+  /// @note 1..moveCounterMax
   uint16_t moveCounter_;
 
-  static constexpr uint8_t mailboxSize = 0x80;
   std::array<Piece, mailboxSize> mailbox_;
 
   // Slot 0 is PieceKind::None; never read, empty squares are skipped
   // before the lookup.
   static constexpr std::array<uint8_t, pieceKindsCount> countMax{0,  8, 10, 10,
                                                                  10, 9, 1};
+  static constexpr std::array<uint8_t, pieceKindsCount> initialCount{0, 8, 2, 2,
+                                                                     2, 1, 1};
   static constexpr std::array<Error, pieceKindsCount> tooManyError{
       Error::TooManyPawns,   Error::TooManyPawns, Error::TooManyKnights,
       Error::TooManyBishops, Error::TooManyRooks, Error::TooManyQueens,
       Error::TooManyKings};
+
+  static constexpr std::array<CastlingRights, chessboardSize> castlingMasks =
+      []() -> std::array<CastlingRights, chessboardSize> {
+    std::array<CastlingRights, chessboardSize> masks{};
+    masks.fill(CastlingRights::All);
+    masks[Square::fromStr("a1").to8x8()] = ~CastlingRights::WhiteQueen;
+    masks[Square::fromStr("h1").to8x8()] = ~CastlingRights::WhiteKing;
+    masks[Square::fromStr("e1").to8x8()] =
+        ~(CastlingRights::WhiteKing | CastlingRights::WhiteQueen);
+    masks[Square::fromStr("a8").to8x8()] = ~CastlingRights::BlackQueen;
+    masks[Square::fromStr("h8").to8x8()] = ~CastlingRights::BlackKing;
+    masks[Square::fromStr("e8").to8x8()] =
+        ~(CastlingRights::BlackKing | CastlingRights::BlackQueen);
+    return masks;
+  }();
+
+  struct RookMove {
+    Square from;
+    Square to;
+  };
+
+  /// @pre `flag` is KingCastle or QueenCastle.
+  [[nodiscard]] static constexpr auto
+  castleRookSquares(const Ply::Flag flag, const uint8_t rank) noexcept
+      -> RookMove {
+    assert((flag == Ply::Flag::KingCastle || flag == Ply::Flag::QueenCastle) &&
+           "not a castle");
+    return flag == Ply::Flag::KingCastle
+               ? RookMove{.from = Square{7, rank}, .to = Square{5, rank}}
+               : RookMove{.from = Square{0, rank}, .to = Square{3, rank}};
+  }
 
   Detail::PieceLists pieceLists_;
 
@@ -145,8 +291,6 @@ private:
         plyClock_(plyClock), moveCounter_(moveCounter), mailbox_(mailbox),
         pieceLists_(pieceLists) {}
 
-  /// Scans the placement into the mailbox and the piece lists, enforcing
-  /// per-kind count limits, pawn rank restrictions and king presence.
   [[nodiscard]] static constexpr auto
   fillPlacement(const Fen::PiecePlacement &placement,
                 std::array<Piece, mailboxSize> &mailbox,
@@ -184,6 +328,28 @@ private:
   }
 
   [[nodiscard]] static constexpr auto
+  validatePromotionBudget(const Detail::PieceLists &pieceLists) noexcept
+      -> std::optional<Error> {
+    for (uint8_t colorIdx = 0; colorIdx < colorsCount; ++colorIdx) {
+      const auto color = static_cast<Color>(colorIdx);
+      uint8_t budget = pieceLists.count(makePiece(color, PieceKind::Pawn));
+      for (auto kindIdx = std::to_underlying(PieceKind::Knight);
+           kindIdx <= std::to_underlying(PieceKind::Queen); ++kindIdx) {
+        const auto count =
+            pieceLists.count(makePiece(color, static_cast<PieceKind>(kindIdx)));
+        if (count > initialCount[kindIdx]) {
+          budget = static_cast<uint8_t>(budget + count - initialCount[kindIdx]);
+        }
+      }
+      if (budget > initialCount[std::to_underlying(PieceKind::Pawn)]) {
+        return Error::TooManyPromotedPieces;
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  [[nodiscard]] static constexpr auto
   validateCastlingRights(const CastlingRights rights,
                          const std::array<Piece, mailboxSize> &mailbox) noexcept
       -> std::optional<Error> {
@@ -196,23 +362,23 @@ private:
     };
     constexpr std::array requirements{
         Requirement{.right = CastlingRights::WhiteKing,
-                    .kingSqr = Square{4, 0},
-                    .rookSqr = Square{7, 0},
+                    .kingSqr = Square::fromStr("e1"),
+                    .rookSqr = Square::fromStr("h1"),
                     .king = Piece::WhiteKing,
                     .rook = Piece::WhiteRook},
         Requirement{.right = CastlingRights::WhiteQueen,
-                    .kingSqr = Square{4, 0},
-                    .rookSqr = Square{0, 0},
+                    .kingSqr = Square::fromStr("e1"),
+                    .rookSqr = Square::fromStr("a1"),
                     .king = Piece::WhiteKing,
                     .rook = Piece::WhiteRook},
         Requirement{.right = CastlingRights::BlackKing,
-                    .kingSqr = Square{4, 7},
-                    .rookSqr = Square{7, 7},
+                    .kingSqr = Square::fromStr("e8"),
+                    .rookSqr = Square::fromStr("h8"),
                     .king = Piece::BlackKing,
                     .rook = Piece::BlackRook},
         Requirement{.right = CastlingRights::BlackQueen,
-                    .kingSqr = Square{4, 7},
-                    .rookSqr = Square{0, 7},
+                    .kingSqr = Square::fromStr("e8"),
+                    .rookSqr = Square::fromStr("a8"),
                     .king = Piece::BlackKing,
                     .rook = Piece::BlackRook},
     };
@@ -249,9 +415,10 @@ private:
       return Error::InvalidEnPassantTargetSquare;
     }
 
-    const int8_t towardsPawn = whiteToMove ? -0x10 : 0x10;
-    const auto pawnSqr = epSqr.shifted(towardsPawn);
-    const auto originSqr = epSqr.shifted(static_cast<int8_t>(-towardsPawn));
+    // The enemy pawn double-pushed through epSqr, so it now stands one
+    // step "behind" epSqr from the side to move's perspective.
+    const auto pawnSqr = epSqr.shiftedBackwards(sideToMove);
+    const auto originSqr = epSqr.shiftedBackwards(flip(sideToMove));
     const auto pawn = whiteToMove ? Piece::BlackPawn : Piece::WhitePawn;
     if (mailbox[epSqr.index()] != Piece::None ||
         mailbox[originSqr.index()] != Piece::None ||

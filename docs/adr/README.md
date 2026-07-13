@@ -19,3 +19,4 @@ editing it. Format follows Michael Nygard's template.
 | [0010](0010-move-generation-strategy.md) | Pseudo-legal move generation with make/unmake | Accepted |
 | [0011](0011-test-naming.md) | Test naming: identifiers follow code style, labels follow text style | Accepted |
 | [0012](0012-detail-namespace.md) | Contractual encapsulation via Detail namespaces | Accepted |
+| [0013](0013-undo-equivalence.md) | Undo restores an equivalent board, not an identical one | Accepted |

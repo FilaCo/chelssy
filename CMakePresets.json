@@ -14,6 +14,17 @@
       }
     },
     {
+      "name": "host-coverage",
+      "displayName": "Host: Debug + tests + coverage reports",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CHELSSY_TESTING": "ON",
+        "CHELSSY_COVERAGE": "ON"
+      }
+    },
+    {
       "name": "fuzz-base",
       "hidden": true,
       "generator": "Ninja",
@@ -30,6 +41,16 @@
     {
       "name": "host-debug",
       "configurePreset": "host-debug"
+    },
+    {
+      "name": "host-coverage-run",
+      "configurePreset": "host-coverage",
+      "targets": ["ccov-all-run"]
+    },
+    {
+      "name": "host-coverage-report",
+      "configurePreset": "host-coverage",
+      "targets": ["ccov-all", "ccov-all-report"]
     }
   ],
   "testPresets": [
@@ -57,6 +78,24 @@
         {
           "type": "test",
           "name": "host-debug"
+        }
+      ]
+    },
+    {
+      "name": "coverage",
+      "displayName": "Configure + run tests + generate coverage report",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "host-coverage"
+        },
+        {
+          "type": "build",
+          "name": "host-coverage-run"
+        },
+        {
+          "type": "build",
+          "name": "host-coverage-report"
         }
       ]
     }

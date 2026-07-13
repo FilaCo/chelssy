@@ -1,3 +1,4 @@
+#include "BoardAssertions.h"
 #include "Chelssy/Chess/Board.h"
 #include "Printing.h" // IWYU pragma: keep
 #include <gtest/gtest.h>
@@ -15,57 +16,6 @@ static_assert(Board::fromFen(Fen::startingPosition()).has_value());
 static_assert(Board::fromFen(*Fen::parse("8/8/8/8/8/8/8/8 w - - 0 1"))
                   .error() == Board::Error::KingMissing);
 
-namespace {
-
-/// @pre `str` is a syntactically valid FEN.
-[[nodiscard]] auto boardFromFenStr(const std::string_view str)
-    -> std::expected<Board, Board::Error> {
-  const auto fen = Fen::parse(str);
-  EXPECT_TRUE(fen.has_value()) << "FEN must be syntactically valid: " << str;
-  return Board::fromFen(fen.value());
-}
-
-/// Checks the mailbox <-> piece-lists consistency invariant: every listed
-/// square holds exactly the listed piece, every occupied mailbox square is
-/// listed, and the totals match (which also rules out duplicates).
-void expectMailboxMatchesPieceLists(const Board &board) {
-  size_t listedTotal = 0;
-  for (uint8_t colorIdx = 0; colorIdx < colorsCount; ++colorIdx) {
-    const auto color = static_cast<Color>(colorIdx);
-    for (auto kindIdx = std::to_underlying(PieceKind::Pawn);
-         kindIdx < pieceKindsCount; ++kindIdx) {
-      const auto kind = static_cast<PieceKind>(kindIdx);
-      const auto piece = makePiece(color, kind);
-      const auto listed = board.squares(piece);
-      for (const auto sqr : listed) {
-        ASSERT_TRUE(sqr.isValid());
-        EXPECT_EQ(makePiece(color, kind), board.pieceAt(sqr));
-      }
-      listedTotal += listed.size();
-    }
-  }
-
-  size_t occupiedTotal = 0;
-  for (uint8_t idx = 0; idx < 0x80; ++idx) {
-    const auto sqr = Square::fromIndex(idx);
-    if (sqr.isInvalid()) {
-      continue;
-    }
-    const auto piece = board.pieceAt(sqr);
-    if (piece == Piece::None) {
-      continue;
-    }
-    ++occupiedTotal;
-    const auto listed = board.squares(piece);
-    EXPECT_NE(std::ranges::find(listed, sqr), listed.end())
-        << "square is occupied but not listed";
-  }
-
-  EXPECT_EQ(occupiedTotal, listedTotal);
-}
-
-} // namespace
-
 TEST(BoardFromFenTest, startingPositionAccessors) {
   // act
   const auto board = Board::fromFen(Fen::startingPosition());
@@ -77,10 +27,10 @@ TEST(BoardFromFenTest, startingPositionAccessors) {
   EXPECT_TRUE(board->enPassantTargetSquare().isInvalid());
   EXPECT_EQ(0, board->plyClock());
   EXPECT_EQ(1, board->moveCounter());
-  EXPECT_EQ(Piece::WhiteKing, board->pieceAt(Square{4, 0}));
-  EXPECT_EQ(Piece::BlackQueen, board->pieceAt(Square{3, 7}));
-  EXPECT_EQ(Piece::WhitePawn, board->pieceAt(Square{0, 1}));
-  EXPECT_EQ(Piece::None, board->pieceAt(Square{4, 3}));
+  EXPECT_EQ(Piece::WhiteKing, board->pieceAt(Square::fromStr("e1")));
+  EXPECT_EQ(Piece::BlackQueen, board->pieceAt(Square::fromStr("d8")));
+  EXPECT_EQ(Piece::WhitePawn, board->pieceAt(Square::fromStr("a2")));
+  EXPECT_EQ(Piece::None, board->pieceAt(Square::fromStr("e4")));
 }
 
 TEST(BoardFromFenTest, startingPositionPieceCounts) {
@@ -113,16 +63,17 @@ TEST(BoardFromFenTest, fenFieldsReachBoard) {
   EXPECT_EQ(Color::Black, board->sideToMove());
   EXPECT_EQ(CastlingRights::WhiteKing | CastlingRights::BlackQueen,
             board->castlingRights());
-  EXPECT_EQ((Square{4, 2}), board->enPassantTargetSquare());
+  EXPECT_EQ(Square::fromStr("e3"), board->enPassantTargetSquare());
   EXPECT_EQ(0, board->plyClock());
   EXPECT_EQ(42, board->moveCounter());
 }
 
 TEST(BoardSquaresTest, startingPositionWhitePawnSquares) {
   // arrange
-  constexpr std::array expected{Square{0, 1}, Square{1, 1}, Square{2, 1},
-                                Square{3, 1}, Square{4, 1}, Square{5, 1},
-                                Square{6, 1}, Square{7, 1}};
+  constexpr std::array expected{
+      Square::fromStr("a2"), Square::fromStr("b2"), Square::fromStr("c2"),
+      Square::fromStr("d2"), Square::fromStr("e2"), Square::fromStr("f2"),
+      Square::fromStr("g2"), Square::fromStr("h2")};
 
   // act
   const auto board = Board::fromFen(Fen::startingPosition());
@@ -226,6 +177,7 @@ struct BoardFromFenErrorTestParam {
         "Board::Error::InvalidCastlingRights",
         "Board::Error::InvalidEnPassantTargetSquare",
         "Board::Error::NonZeroPlyClockWithEnPassant",
+        "Board::Error::TooManyPromotedPieces",
     };
 
     *out << std::format("{{ name: {}, input: {}, expected error: {} }}",
@@ -274,6 +226,15 @@ INSTANTIATE_TEST_SUITE_P(
                                    TooManyQueens},
         BoardFromFenErrorTestParam{
             "two_white_kings", "4k3/8/8/8/8/8/8/K3K3 w - - 0 1", TooManyKings},
+
+        // promotion budget: pawns + promoted surplus must fit into the
+        // initial 8 pawns, otherwise a promotion could overflow a piece list
+        BoardFromFenErrorTestParam{"ten_rooks_plus_pawn",
+                                   "4k3/P7/8/8/8/RRRRRRRR/8/RR2K3 w - - 0 1",
+                                   TooManyPromotedPieces},
+        BoardFromFenErrorTestParam{"ten_black_knights_plus_pawn",
+                                   "4k3/8/8/8/2p5/nn6/nnnnnnnn/4K3 w - - 0 1",
+                                   TooManyPromotedPieces},
 
         // king presence
         BoardFromFenErrorTestParam{"white_king_missing",

@@ -7,6 +7,10 @@ target_link_libraries(chelssy_core_tests PRIVATE
         GTest::gtest_main
 )
 
+target_code_coverage(chelssy_core_tests AUTO ALL
+        LCOV_EXCLUDE */tests/* */_deps/*
+        LLVM_EXCLUDE .*/tests/.* .*/_deps/.*)
+
 add_subdirectory(Chess)
 
 gtest_discover_tests(chelssy_core_tests NO_PRETTY_VALUES)

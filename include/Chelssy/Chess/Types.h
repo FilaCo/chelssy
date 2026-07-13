@@ -2,14 +2,15 @@
 
 #include "Consts.h"
 
+#include <array>
 #include <cassert>
 #include <cstdint>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
 namespace Chelssy::Chess {
 
-/// Side of play. Also used to tag piece ownership.
 enum class Color : uint8_t {
   White = 0,
   Black,
@@ -63,9 +64,8 @@ enum class PieceKind : uint8_t {
   End,
 };
 
-/// Dimension for kind-indexed arrays; includes the PieceKind::None slot.
 static constexpr uint8_t pieceKindsCount = std::to_underlying(PieceKind::End);
-static constexpr uint8_t pieceKindMask = 0x7;
+static constexpr uint8_t pieceKindMask = pieceKindsCount;
 
 /// Returns piece color.
 /// @pre `piece != Piece::None`
@@ -153,8 +153,6 @@ enum class CastlingRights : uint8_t {
   /// Queen castle is available for black side.
   BlackQueen = 1 << 3,
   All = WhiteKing | WhiteQueen | BlackKing | BlackQueen,
-  /// Sentinel value.
-  End = 1 << 4,
 };
 
 [[nodiscard]] constexpr auto operator&(const CastlingRights lhs,
@@ -247,14 +245,54 @@ static_assert(!hasAny(CastlingRights::WhiteKing,
 /// This is the defining property of 0x88: a square is on the board if
 /// none of the overflow bits are set, i.e. `(index & 0x88) == 0`.
 struct Square {
+  static constexpr int8_t north = 0x10;
+  static constexpr int8_t south = -north;
+  static constexpr int8_t east = 1;
+  static constexpr int8_t west = -east;
+
+  static constexpr int8_t northEast = north + east;
+  static constexpr int8_t northWest = north + west;
+  static constexpr int8_t southEast = south + east;
+  static constexpr int8_t southWest = south + west;
+
+  static constexpr int8_t northNorthEast = north + northEast;
+  static constexpr int8_t eastNorthEast = east + northEast;
+  static constexpr int8_t eastSouthEast = east + southEast;
+  static constexpr int8_t southSouthEast = south + southEast;
+  static constexpr int8_t southSouthWest = south + southWest;
+  static constexpr int8_t westSouthWest = west + southWest;
+  static constexpr int8_t westNorthWest = west + northWest;
+  static constexpr int8_t northNorthWest = north + northWest;
+
+  static constexpr std::array<int8_t, 2> pawnPushOffsets{north, south};
+  static constexpr std::array<std::array<int8_t, 2>, 2> pawnAttackOffsets{
+      {{northEast, northWest}, {southEast, southWest}}};
+
+  static constexpr std::array<int8_t, 8> knightOffsets{
+      northNorthEast, eastNorthEast, eastSouthEast, southSouthEast,
+      southSouthWest, westSouthWest, westNorthWest, northNorthWest};
+  static constexpr std::array<int8_t, 4> bishopOffsets{northEast, northWest,
+                                                       southEast, southWest};
+  static constexpr std::array<int8_t, 4> rookOffsets{north, south, east, west};
+
+  // queen offsets is missing because it has the sum of bishop and rook moves.
+
+  static constexpr std::array<int8_t, 8> kingOffsets{
+      north, south, east, west, northEast, northWest, southEast, southWest};
+
+  static constexpr std::array<int8_t, 2> backwards{south, north};
+
   /// Constructs a placeholder square.
   /// @note `isInvalid()`
-  constexpr Square() noexcept : Square(Square::none()) {}
+  constexpr Square() noexcept : Square(Square::none()) {
+    assert(isInvalid() && "placeholder square must be invalid");
+  }
 
   /// @pre `file <= file_max && rank <= rank_max`
   constexpr Square(const uint8_t file, const uint8_t rank) noexcept
       : Square(static_cast<uint8_t>(rank << rankShift) | file) {
-    assert(file <= fileMax && rank <= rankMax && "invalid arguments");
+    assert(file <= fileMax && "invalid file");
+    assert(rank <= rankMax && "invalid rank");
   }
 
   /// Sentinel "no square" value (e.g. no en-passant target).
@@ -280,6 +318,18 @@ struct Square {
       -> Square {
     assert(idx < chessboardSize && "invalid index");
     return Square(static_cast<uint8_t>(idx + (idx & ~fileMask)));
+  }
+
+  /// Builds a single square from an algebraic notation, e.g. `a8`
+  /// @pre `str.length() >= 2`
+  /// @pre `file in a..h; rank in 1..8`
+  [[nodiscard]] static constexpr auto
+  fromStr(const std::string_view str) noexcept -> Square {
+    assert(str.length() >= 2 && "`str` is too short");
+
+    const auto file = static_cast<uint8_t>(str[0] - 'a');
+    const auto rank = static_cast<uint8_t>(str[1] - '1');
+    return Square{file, rank};
   }
 
   [[nodiscard]] constexpr auto isValid() const noexcept -> bool {
@@ -317,15 +367,24 @@ struct Square {
     return inner_;
   }
 
-  /// Returns the square displaced by a 0x88 offset: 0x10 is one rank up,
-  /// 0x01 one file right (e.g. north-east = 0x11, a knight jump = +-0x21,
-  /// +-0x1F, +-0x12, +-0x0E).
+  /// Returns the square displaced by a 0x88 offset.
   ///
   /// @note Allows to make invalid squares. Check the return value with
   /// `isValid()`.
   [[nodiscard]] constexpr auto shifted(const int8_t offset) const noexcept
       -> Square {
     return fromIndex(static_cast<uint8_t>(inner_ + offset));
+  }
+
+  /// Returns the square behind current. Useful for en passant processing.
+  ///
+  /// @pre `color != Color::End`
+  /// @note Allows to make invalid squares. Check the return value with
+  /// `isValid()`.
+  [[nodiscard]] constexpr auto
+  shiftedBackwards(const Color color) const noexcept -> Square {
+    assert(color != Color::End && "color is invalid");
+    return shifted(backwards[std::to_underlying(color)]);
   }
 
 private:
@@ -349,6 +408,7 @@ static_assert(Square::none() == Square{});
 static_assert(Square::from8x8(0) == Square(0, 0));                    // a1
 static_assert(Square::from8x8(63) == Square(7, 7));                   // h8
 static_assert(Square::from8x8(Square(4, 3).to8x8()) == Square(4, 3)); // e4
+static_assert(Square::fromStr("a8") == Square{0, 7});
 
 /// A half-move packed into 16 bits: `ffff_ssssss_tttttt` - 4 bits of
 /// Flag, then the from and to squares as 6-bit 8x8 indices.
@@ -357,7 +417,6 @@ static_assert(Square::from8x8(Square(4, 3).to8x8()) == Square(4, 3)); // e4
 /// the packed representation halves the search stack footprint.
 struct Ply {
   /// What doPly must handle besides moving a piece from `from` to `to`.
-  /// A ply carries exactly one Flag; these are codes, not a bitmask.
   ///
   /// Bit 2 marks captures and bit 3 marks promotions with the promoted
   /// kind in bits 0-1; see isCapture/isPromotion/promoKind.
@@ -382,7 +441,10 @@ struct Ply {
   constexpr Ply(const Square from, const Square to, const Flag flag) noexcept
       : inner_(static_cast<uint16_t>((std::to_underlying(flag) << flagShift) |
                                      (from.to8x8() << fromShift) |
-                                     to.to8x8())) {}
+                                     to.to8x8())) {
+    assert(from.isValid() && "invalid from square");
+    assert(to.isValid() && "invalid to square");
+  }
 
   [[nodiscard]] constexpr auto from() const noexcept -> Square {
     return Square::from8x8(
@@ -431,47 +493,67 @@ static_assert(sizeof(Ply) == 2);
 static_assert(std::is_trivially_copyable_v<Ply>);
 
 // e2-e4: field extraction round trip.
-static_assert(Ply(Square{4, 1}, Square{4, 3}, Ply::Flag::DoublePawnPush)
-                  .from() == (Square{4, 1}));
-static_assert(Ply(Square{4, 1}, Square{4, 3}, Ply::Flag::DoublePawnPush).to() ==
-              (Square{4, 3}));
-static_assert(Ply(Square{4, 1}, Square{4, 3}, Ply::Flag::DoublePawnPush)
+static_assert(Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                  Ply::Flag::DoublePawnPush)
+                  .from() == Square::fromStr("e2"));
+static_assert(Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                  Ply::Flag::DoublePawnPush)
+                  .to() == Square::fromStr("e4"));
+static_assert(Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                  Ply::Flag::DoublePawnPush)
                   .flag() == Ply::Flag::DoublePawnPush);
-static_assert(
-    !Ply(Square{4, 1}, Square{4, 3}, Ply::Flag::DoublePawnPush).isCapture());
-static_assert(
-    !Ply(Square{4, 1}, Square{4, 3}, Ply::Flag::DoublePawnPush).isPromotion());
-
-// Corner-to-corner pins the square packing.
-static_assert(Ply(Square{0, 0}, Square{7, 7}, Ply::Flag::Quiet).from() ==
-              (Square{0, 0}));
-static_assert(Ply(Square{0, 0}, Square{7, 7}, Ply::Flag::Quiet).to() ==
-              (Square{7, 7}));
-
-static_assert(Ply(Square{3, 3}, Square{4, 4}, Ply::Flag::Capture).isCapture());
-static_assert(
-    Ply(Square{4, 4}, Square{3, 5}, Ply::Flag::EnPassantCapture).isCapture());
-static_assert(!Ply(Square{4, 4}, Square{3, 5}, Ply::Flag::EnPassantCapture)
+static_assert(!Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                   Ply::Flag::DoublePawnPush)
+                   .isCapture());
+static_assert(!Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                   Ply::Flag::DoublePawnPush)
                    .isPromotion());
 
-static_assert(Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::KnightPromo)
-                  .promoKind() == PieceKind::Knight);
-static_assert(Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::BishopPromo)
-                  .promoKind() == PieceKind::Bishop);
-static_assert(Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::RookPromo)
-                  .promoKind() == PieceKind::Rook);
-static_assert(Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::QueenPromo)
-                  .promoKind() == PieceKind::Queen);
+// Corner-to-corner pins the square packing.
+static_assert(Ply(Square::fromStr("a1"), Square::fromStr("h8"),
+                  Ply::Flag::Quiet)
+                  .from() == Square::fromStr("a1"));
 static_assert(
-    Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::KnightPromo).isPromotion());
-static_assert(
-    !Ply(Square{0, 6}, Square{0, 7}, Ply::Flag::KnightPromo).isCapture());
+    Ply(Square::fromStr("a1"), Square::fromStr("h8"), Ply::Flag::Quiet).to() ==
+    Square::fromStr("h8"));
 
-static_assert(
-    Ply(Square{0, 6}, Square{1, 7}, Ply::Flag::QueenPromoCapture).isCapture());
-static_assert(Ply(Square{0, 6}, Square{1, 7}, Ply::Flag::QueenPromoCapture)
+static_assert(Ply(Square::fromStr("d4"), Square::fromStr("e5"),
+                  Ply::Flag::Capture)
+                  .isCapture());
+static_assert(Ply(Square::fromStr("e5"), Square::fromStr("d6"),
+                  Ply::Flag::EnPassantCapture)
+                  .isCapture());
+static_assert(!Ply(Square::fromStr("e5"), Square::fromStr("d6"),
+                   Ply::Flag::EnPassantCapture)
+                   .isPromotion());
+
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                  Ply::Flag::KnightPromo)
+                  .promoKind() == PieceKind::Knight);
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                  Ply::Flag::BishopPromo)
+                  .promoKind() == PieceKind::Bishop);
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                  Ply::Flag::RookPromo)
+                  .promoKind() == PieceKind::Rook);
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                  Ply::Flag::QueenPromo)
+                  .promoKind() == PieceKind::Queen);
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                  Ply::Flag::KnightPromo)
                   .isPromotion());
-static_assert(Ply(Square{0, 6}, Square{1, 7}, Ply::Flag::QueenPromoCapture)
+static_assert(!Ply(Square::fromStr("a7"), Square::fromStr("a8"),
+                   Ply::Flag::KnightPromo)
+                   .isCapture());
+
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("b8"),
+                  Ply::Flag::QueenPromoCapture)
+                  .isCapture());
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("b8"),
+                  Ply::Flag::QueenPromoCapture)
+                  .isPromotion());
+static_assert(Ply(Square::fromStr("a7"), Square::fromStr("b8"),
+                  Ply::Flag::QueenPromoCapture)
                   .promoKind() == PieceKind::Queen);
 
 struct Undo {
