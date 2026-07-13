@@ -44,6 +44,23 @@ jobs:
         run: cmake --build --preset coverage-run
       - name: Report coverage
         run: cmake --build --preset coverage-report
+      # The ccov-all-export target emits llvm-cov JSON; Codecov wants lcov,
+      # so export directly from the profdata the report step already built.
+      - name: Export lcov for Codecov
+        run: >
+          llvm-cov-20 export
+          `cat build/coverage/ccov-data/all-objects.list`
+          -instr-profile=build/coverage/ccov-data/ccov-all.profdata
+          -format=lcov
+          -ignore-filename-regex='.*/tests/.*'
+          -ignore-filename-regex='.*/_deps/.*'
+          > build/coverage/coverage.lcov
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage/coverage.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         with:
