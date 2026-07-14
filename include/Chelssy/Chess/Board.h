@@ -104,6 +104,15 @@ struct Board {
     return pieceLists_.squares(piece);
   }
 
+  /// @pre `color != Color::End`.
+  [[nodiscard]] constexpr auto kingSquare(const Color color) const noexcept
+      -> Square {
+    assert(color != Color::End && "invalid color");
+    const auto squares = pieceLists_.squares(makePiece(color, PieceKind::King));
+    assert(squares.size() == 1 && "expected exactly one king");
+    return squares[0];
+  }
+
   /// Applies a ply and records the irreversible state in `undo`.
   ///
   /// @pre `ply` is semi-legal for this position

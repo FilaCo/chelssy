@@ -20,6 +20,7 @@ enum class Color : uint8_t {
 
 static constexpr uint8_t colorsCount = std::to_underlying(Color::End);
 
+/// @pre `color != Color::End`
 [[nodiscard]] constexpr auto flip(const Color color) noexcept -> Color {
   assert(color != Color::End && "invalid color");
   return static_cast<Color>(std::to_underlying(color) ^ 1);
