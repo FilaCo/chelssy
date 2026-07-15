@@ -26,8 +26,7 @@ struct Board {
     TooManyQueens,
     TooManyKings,
     KingMissing,
-    WhitePawnOnFirstRank,
-    BlackPawnOnLastRank,
+    PawnOnBackRank,
     InvalidPlyClock,
     InvalidMoveCounter,
     InvalidCastlingRights,
@@ -99,6 +98,11 @@ struct Board {
     return mailbox_[sqr.index()];
   }
 
+  [[nodiscard]] constexpr auto isEmpty(const Square sqr) const noexcept
+      -> bool {
+    return isNone(pieceAt(sqr));
+  }
+
   [[nodiscard]] constexpr auto squares(const Piece piece) const noexcept
       -> std::span<const Square> {
     return pieceLists_.squares(piece);
@@ -115,7 +119,7 @@ struct Board {
 
   /// Applies a ply and records the irreversible state in `undo`.
   ///
-  /// @pre `ply` is semi-legal for this position
+  /// @pre `ply` is pseudo-legal for this position
   /// @note `undo.prev` is untouched.
   /// @note plyClock may exceed plyClockMax during play; draw adjudication
   /// is the caller's job.
@@ -318,11 +322,11 @@ private:
       if (pieceLists.count(piece) >= countMax[kindIdx]) {
         return tooManyError[kindIdx];
       }
-      if (piece == Piece::WhitePawn && sqr.rank() == 0) {
-        return Error::WhitePawnOnFirstRank;
-      }
-      if (piece == Piece::BlackPawn && sqr.rank() == rankMax) {
-        return Error::BlackPawnOnLastRank;
+      // No pawn of either color can stand on a back rank: it either
+      // could not have moved there or must have promoted.
+      if (getKind(piece) == PieceKind::Pawn &&
+          (sqr.rank() == 0 || sqr.rank() == rankMax)) {
+        return Error::PawnOnBackRank;
       }
 
       pieceLists.add(piece, sqr);

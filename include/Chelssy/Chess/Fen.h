@@ -494,29 +494,14 @@ private:
   [[nodiscard]] static constexpr auto
   parseEpSqr(const std::string_view str) noexcept
       -> std::expected<Square, Error> {
-    if (str.empty()) {
-      return std::unexpected(Error::InvalidEnPassantTargetSquareValue);
-    }
-
-    if (str[0] == '-' && str.length() == 1) {
+    if (str == "-") {
       return Square::none();
     }
-
-    if (str.length() != 2) {
+    if (str.length() != 2 || str[0] < 'a' || str[0] > 'h' ||
+        (str[1] != '3' && str[1] != '6')) {
       return std::unexpected(Error::InvalidEnPassantTargetSquareValue);
     }
-
-    const auto fileChr = str[0];
-    if (fileChr < 'a' || fileChr > 'h') {
-      return std::unexpected(Error::InvalidEnPassantTargetSquareValue);
-    }
-    const auto file = fileChr - 'a';
-    const auto rank = str[1] - '1';
-    if (rank != 2 && rank != 5) {
-      return std::unexpected(Error::InvalidEnPassantTargetSquareValue);
-    }
-
-    return Square(static_cast<uint8_t>(file), static_cast<uint8_t>(rank));
+    return Square::fromStr(str);
   }
 
   [[nodiscard]] static constexpr auto

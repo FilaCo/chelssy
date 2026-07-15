@@ -29,6 +29,22 @@ static constexpr uint8_t colorsCount = std::to_underlying(Color::End);
 static_assert(Color::White == flip(Color::Black));
 static_assert(Color::Black == flip(Color::White));
 
+/// Maps a rank to `color`'s point of view: identity for white, mirrored
+/// for black. 0 is each side's back rank, rankMax its promotion rank.
+/// @pre `color != Color::End && rank <= rankMax`
+[[nodiscard]] constexpr auto relativeRank(const Color color,
+                                          const uint8_t rank) noexcept
+    -> uint8_t {
+  assert(color != Color::End && "invalid color");
+  assert(rank <= rankMax && "invalid rank");
+  return color == Color::White ? rank : static_cast<uint8_t>(rankMax - rank);
+}
+
+static_assert(relativeRank(Color::White, 0) == 0);
+static_assert(relativeRank(Color::White, rankMax - 1) == rankMax - 1);
+static_assert(relativeRank(Color::Black, 0) == rankMax);
+static_assert(relativeRank(Color::Black, rankMax - 1) == 1);
+
 /// Piece kind combined with its color.
 ///
 /// 0..2 bits encode a piece kind.
@@ -68,6 +84,15 @@ enum class PieceKind : uint8_t {
 static constexpr uint8_t pieceKindsCount = std::to_underlying(PieceKind::End);
 static constexpr uint8_t pieceKindMask = pieceKindsCount;
 
+/// Returns true when `piece` marks an empty square.
+[[nodiscard]] constexpr auto isNone(const Piece piece) noexcept -> bool {
+  return piece == Piece::None;
+}
+
+static_assert(isNone(Piece::None));
+static_assert(!isNone(Piece::WhitePawn));
+static_assert(!isNone(Piece::BlackKing));
+
 /// Returns piece color.
 /// @pre `piece != Piece::None`
 [[nodiscard]] constexpr auto getColor(const Piece piece) noexcept -> Color {
@@ -88,6 +113,21 @@ static_assert(getColor(Piece::BlackBishop) == Color::Black);
 static_assert(getColor(Piece::BlackRook) == Color::Black);
 static_assert(getColor(Piece::BlackQueen) == Color::Black);
 static_assert(getColor(Piece::BlackKing) == Color::Black);
+
+/// Returns true when `piece` is a real piece of the given color; false
+/// for an empty square, so no emptiness pre-check is needed.
+/// @pre `color != Color::End`
+[[nodiscard]] constexpr auto hasColor(const Piece piece,
+                                      const Color color) noexcept -> bool {
+  assert(color != Color::End && "invalid color");
+  return !isNone(piece) && getColor(piece) == color;
+}
+
+static_assert(hasColor(Piece::WhitePawn, Color::White));
+static_assert(hasColor(Piece::BlackKing, Color::Black));
+static_assert(!hasColor(Piece::WhitePawn, Color::Black));
+static_assert(!hasColor(Piece::None, Color::White));
+static_assert(!hasColor(Piece::None, Color::Black));
 
 /// Returns piece kind.
 /// @pre `piece != Piece::None`
@@ -235,6 +275,29 @@ static_assert(hasAny(CastlingRights::WhiteKing | CastlingRights::BlackQueen,
 static_assert(!hasAny(CastlingRights::WhiteKing,
                       CastlingRights::BlackKing | CastlingRights::BlackQueen));
 
+/// Returns the king-side castling right of `color`.
+/// @pre `color != Color::End`
+[[nodiscard]] constexpr auto kingCastleRight(const Color color) noexcept
+    -> CastlingRights {
+  assert(color != Color::End && "invalid color");
+  return color == Color::White ? CastlingRights::WhiteKing
+                               : CastlingRights::BlackKing;
+}
+
+/// Returns the queen-side castling right of `color`.
+/// @pre `color != Color::End`
+[[nodiscard]] constexpr auto queenCastleRight(const Color color) noexcept
+    -> CastlingRights {
+  assert(color != Color::End && "invalid color");
+  return color == Color::White ? CastlingRights::WhiteQueen
+                               : CastlingRights::BlackQueen;
+}
+
+static_assert(kingCastleRight(Color::White) == CastlingRights::WhiteKing);
+static_assert(kingCastleRight(Color::Black) == CastlingRights::BlackKing);
+static_assert(queenCastleRight(Color::White) == CastlingRights::WhiteQueen);
+static_assert(queenCastleRight(Color::Black) == CastlingRights::BlackQueen);
+
 /// A board square in 0x88 encoding.
 ///
 /// The square index is a single byte laid out as `0rrr_0fff`:
@@ -377,6 +440,17 @@ struct Square {
     return fromIndex(static_cast<uint8_t>(inner_ + offset));
   }
 
+  /// Returns the square in front of the current one. Useful for pawn pushes.
+  ///
+  /// @pre `color != Color::End`
+  /// @note Allows to make invalid squares. Check the return value with
+  /// `isValid()`.
+  [[nodiscard]] constexpr auto shiftedForwards(const Color color) const noexcept
+      -> Square {
+    assert(color != Color::End && "color is invalid");
+    return shifted(pawnPushOffsets[std::to_underlying(color)]);
+  }
+
   /// Returns the square behind current. Useful for en passant processing.
   ///
   /// @pre `color != Color::End`
@@ -410,6 +484,10 @@ static_assert(Square::from8x8(0) == Square(0, 0));                    // a1
 static_assert(Square::from8x8(63) == Square(7, 7));                   // h8
 static_assert(Square::from8x8(Square(4, 3).to8x8()) == Square(4, 3)); // e4
 static_assert(Square::fromStr("a8") == Square{0, 7});
+static_assert(Square::fromStr("e2").shiftedForwards(Color::White) ==
+              Square::fromStr("e3"));
+static_assert(Square::fromStr("e7").shiftedForwards(Color::Black) ==
+              Square::fromStr("e6"));
 
 /// A half-move packed into 16 bits: `ffff_ssssss_tttttt` - 4 bits of
 /// Flag, then the from and to squares as 6-bit 8x8 indices.
@@ -437,6 +515,8 @@ struct Ply {
     RookPromoCapture = 0b1110,
     QueenPromoCapture = 0b1111,
   };
+
+  constexpr Ply() noexcept = default;
 
   /// @pre `from.isValid() && to.isValid()`
   constexpr Ply(const Square from, const Square to, const Flag flag) noexcept
@@ -479,7 +559,7 @@ struct Ply {
       -> bool = default;
 
 private:
-  uint16_t inner_;
+  uint16_t inner_ = 0;
 
   static constexpr uint8_t fromShift = 6;
   static constexpr uint8_t flagShift = 12;

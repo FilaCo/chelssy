@@ -31,6 +31,24 @@ static_assert([]() -> bool {
          board.enPassantTargetSquare().isInvalid();
 }());
 
+// kingSquare follows the king through a castle and back through undo,
+// leaving the other king untouched.
+static_assert([]() -> bool {
+  const Ply ply{Square::fromStr("e1"), Square::fromStr("g1"),
+                Ply::Flag::KingCastle};
+  auto board = *Board::fromFen(*Fen::parse("4k3/8/8/8/8/8/8/4K2R w K - 0 1"));
+  Undo undo{};
+
+  board.doPly(ply, undo);
+  const auto castled =
+      board.kingSquare(Color::White) == Square::fromStr("g1") &&
+      board.kingSquare(Color::Black) == Square::fromStr("e8");
+
+  board.undoPly(ply, undo);
+  return castled && board.kingSquare(Color::White) == Square::fromStr("e1") &&
+         board.kingSquare(Color::Black) == Square::fromStr("e8");
+}());
+
 namespace {
 
 struct PlyTestParam {

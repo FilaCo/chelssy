@@ -16,6 +16,13 @@ static_assert(Board::fromFen(Fen::startingPosition()).has_value());
 static_assert(Board::fromFen(*Fen::parse("8/8/8/8/8/8/8/8 w - - 0 1"))
                   .error() == Board::Error::KingMissing);
 
+// kingSquare resolves each color independently.
+static_assert([]() -> bool {
+  const auto board = *Board::fromFen(Fen::startingPosition());
+  return board.kingSquare(Color::White) == Square::fromStr("e1") &&
+         board.kingSquare(Color::Black) == Square::fromStr("e8");
+}());
+
 TEST(BoardFromFenTest, startingPositionAccessors) {
   // act
   const auto board = Board::fromFen(Fen::startingPosition());
@@ -31,6 +38,8 @@ TEST(BoardFromFenTest, startingPositionAccessors) {
   EXPECT_EQ(Piece::BlackQueen, board->pieceAt(Square::fromStr("d8")));
   EXPECT_EQ(Piece::WhitePawn, board->pieceAt(Square::fromStr("a2")));
   EXPECT_EQ(Piece::None, board->pieceAt(Square::fromStr("e4")));
+  EXPECT_TRUE(board->isEmpty(Square::fromStr("e4")));
+  EXPECT_FALSE(board->isEmpty(Square::fromStr("e1")));
 }
 
 TEST(BoardFromFenTest, startingPositionPieceCounts) {
@@ -87,6 +96,16 @@ TEST(BoardSquaresTest, startingPositionWhitePawnSquares) {
   // The listing order is an implementation detail; compare as sets.
   std::ranges::sort(actual, {}, &Square::index);
   EXPECT_TRUE(std::ranges::equal(expected, actual));
+}
+
+TEST(BoardKingSquareTest, locatesBothKingsAwayFromHomeSquares) {
+  // act
+  const auto board = boardFromFenStr("8/8/4k3/8/8/3K4/8/8 w - - 0 1");
+
+  // assert
+  ASSERT_TRUE(board.has_value());
+  EXPECT_EQ(Square::fromStr("d3"), board->kingSquare(Color::White));
+  EXPECT_EQ(Square::fromStr("e6"), board->kingSquare(Color::Black));
 }
 
 namespace {
@@ -170,8 +189,7 @@ struct BoardFromFenErrorTestParam {
         "Board::Error::TooManyQueens",
         "Board::Error::TooManyKings",
         "Board::Error::KingMissing",
-        "Board::Error::WhitePawnOnFirstRank",
-        "Board::Error::BlackPawnOnLastRank",
+        "Board::Error::PawnOnBackRank",
         "Board::Error::InvalidPlyClock",
         "Board::Error::InvalidMoveCounter",
         "Board::Error::InvalidCastlingRights",
@@ -242,13 +260,19 @@ INSTANTIATE_TEST_SUITE_P(
         BoardFromFenErrorTestParam{"black_king_missing",
                                    "8/8/8/8/8/8/8/4K3 w - - 0 1", KingMissing},
 
-        // pawn ranks
+        // pawn ranks: no pawn of either color may stand on rank 1 or 8
         BoardFromFenErrorTestParam{"white_pawn_on_first_rank",
                                    "4k3/8/8/8/8/8/8/P3K3 w - - 0 1",
-                                   WhitePawnOnFirstRank},
+                                   PawnOnBackRank},
         BoardFromFenErrorTestParam{"black_pawn_on_last_rank",
                                    "p3k3/8/8/8/8/8/8/4K3 w - - 0 1",
-                                   BlackPawnOnLastRank},
+                                   PawnOnBackRank},
+        BoardFromFenErrorTestParam{"white_pawn_on_last_rank",
+                                   "P3k3/8/8/8/8/8/8/4K3 w - - 0 1",
+                                   PawnOnBackRank},
+        BoardFromFenErrorTestParam{"black_pawn_on_first_rank",
+                                   "4k3/8/8/8/8/8/8/p3K3 w - - 0 1",
+                                   PawnOnBackRank},
 
         // castling rights vs placement
         BoardFromFenErrorTestParam{"castling_rook_missing",
