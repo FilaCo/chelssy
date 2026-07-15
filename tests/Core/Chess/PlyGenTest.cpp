@@ -92,7 +92,7 @@ namespace {
       if (sqr == target) {
         return true;
       }
-      if (board.pieceAt(sqr) != Piece::None) {
+      if (!board.isEmpty(sqr)) {
         break;
       }
     }
@@ -109,7 +109,7 @@ namespace {
       continue;
     }
     const auto piece = board.pieceAt(from);
-    if (piece == Piece::None || getColor(piece) != by) {
+    if (!hasColor(piece, by)) {
       continue;
     }
 

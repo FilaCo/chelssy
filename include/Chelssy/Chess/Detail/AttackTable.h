@@ -152,7 +152,7 @@ anySliderAttack(const Board &board, const Square sqr, const Piece piece,
         // Walk from attacker to target
         auto sq =
             Square::fromIndex(static_cast<uint8_t>(from.index() + entry.delta));
-        while (sq != sqr && board.pieceAt(sq) == Piece::None) {
+        while (sq != sqr && board.isEmpty(sq)) {
           sq =
               Square::fromIndex(static_cast<uint8_t>(sq.index() + entry.delta));
         }

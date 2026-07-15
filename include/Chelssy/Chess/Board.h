@@ -129,8 +129,7 @@ struct Board {
     const auto to = ply.to();
     const auto flag = ply.flag();
     const auto mover = pieceAt(from);
-    assert(mover != Piece::None && getColor(mover) == sideToMove_ &&
-           "no own piece on the from square");
+    assert(hasColor(mover, sideToMove_) && "no own piece on the from square");
 
     undo.castlingRights = castlingRights_;
     undo.epSqr = epSqr_;
@@ -143,15 +142,14 @@ struct Board {
                                    ? to.shiftedBackwards(sideToMove_)
                                    : to;
       const auto captured = pieceAt(capturedSqr);
-      assert(captured != Piece::None &&
-             getColor(captured) == flip(sideToMove_) &&
+      assert(hasColor(captured, flip(sideToMove_)) &&
              "no enemy piece on the capture square");
       assert(getKind(captured) != PieceKind::King && "king capture");
       undo.captured = captured;
       pieceLists_.remove(captured, capturedSqr);
       mailbox_[capturedSqr.index()] = Piece::None;
     }
-    assert(pieceAt(to) == Piece::None && "`to` square is occupied");
+    assert(isEmpty(to) && "`to` square is occupied");
 
     mailbox_[from.index()] = Piece::None;
     if (ply.isPromotion()) {
@@ -209,8 +207,7 @@ struct Board {
       mailbox_[from.index()] = pawn;
     } else {
       const auto mover = pieceAt(to);
-      assert(mover != Piece::None && getColor(mover) == sideToMove_ &&
-             "no own piece on the to square");
+      assert(hasColor(mover, sideToMove_) && "no own piece on the to square");
       pieceLists_.move(mover, to, from);
       mailbox_[from.index()] = mover;
     }
@@ -225,7 +222,7 @@ struct Board {
       mailbox_[rookFrom.index()] = rook;
     }
 
-    if (undo.captured != Piece::None) {
+    if (!isNone(undo.captured)) {
       const auto capturedSqr = flag == PlyFlag::EnPassantCapture
                                    ? to.shiftedBackwards(sideToMove_)
                                    : to;
@@ -315,7 +312,7 @@ private:
         continue;
       }
       const auto piece = placement.at(sqr);
-      if (piece == Piece::None) {
+      if (isNone(piece)) {
         continue;
       }
       const auto kindIdx = std::to_underlying(getKind(piece));
@@ -422,19 +419,17 @@ private:
       return Error::NonZeroPlyClockWithEnPassant;
     }
 
-    const auto whiteToMove = sideToMove == Color::White;
-    const uint8_t expectedRank = whiteToMove ? rankMax - 2 : 2;
-    if (epSqr.rank() != expectedRank) {
+    if (epSqr.rank() != relativeRank(sideToMove, rankMax - 2)) {
       return Error::InvalidEnPassantTargetSquare;
     }
 
     // The enemy pawn double-pushed through epSqr, so it now stands one
     // step "behind" epSqr from the side to move's perspective.
     const auto pawnSqr = epSqr.shiftedBackwards(sideToMove);
-    const auto originSqr = epSqr.shiftedBackwards(flip(sideToMove));
-    const auto pawn = whiteToMove ? Piece::BlackPawn : Piece::WhitePawn;
-    if (mailbox[epSqr.index()] != Piece::None ||
-        mailbox[originSqr.index()] != Piece::None ||
+    const auto originSqr = epSqr.shiftedForwards(sideToMove);
+    const auto pawn = makePiece(flip(sideToMove), PieceKind::Pawn);
+    if (!isNone(mailbox[epSqr.index()]) ||
+        !isNone(mailbox[originSqr.index()]) ||
         mailbox[pawnSqr.index()] != pawn) {
       return Error::InvalidEnPassantTargetSquare;
     }

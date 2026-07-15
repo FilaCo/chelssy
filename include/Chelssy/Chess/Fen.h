@@ -63,7 +63,7 @@ struct Fen {
           continue;
         }
 
-        if (const auto piece = parsePiece(chr); piece != Piece::None) {
+        if (const auto piece = parsePiece(chr); !isNone(piece)) {
           if (file > fileMax) {
             return std::unexpected(Error::InvalidPiecePlacementValue);
           }
@@ -120,7 +120,7 @@ struct Fen {
           file = 0;
         }
 
-        if (curPiece == Piece::None) {
+        if (isNone(curPiece)) {
           ++emptyCnt;
           ++file;
           continue;
@@ -163,7 +163,7 @@ struct Fen {
     /// @pre `piece != Piece::None`.
     [[nodiscard]] static constexpr auto
     piece2FenChar(const Piece piece) noexcept -> char {
-      assert(piece != Piece::None && "invalid piece");
+      assert(!isNone(piece) && "invalid piece");
       constexpr std::array pieceChr = {
           '\0', // we handle Piece::None with a dedicated counter
           'P', 'N', 'B', 'R', 'Q', 'K', // white

@@ -20,13 +20,13 @@ static_assert([]() -> bool {
   board.doPly(ply, undo);
   const auto applied =
       board.pieceAt(Square::fromStr("e4")) == Piece::WhitePawn &&
-      board.pieceAt(Square::fromStr("e2")) == Piece::None &&
+      board.isEmpty(Square::fromStr("e2")) &&
       board.sideToMove() == Color::Black &&
       board.enPassantTargetSquare() == Square::fromStr("e3");
 
   board.undoPly(ply, undo);
   return applied && board.pieceAt(Square::fromStr("e2")) == Piece::WhitePawn &&
-         board.pieceAt(Square::fromStr("e4")) == Piece::None &&
+         board.isEmpty(Square::fromStr("e4")) &&
          board.sideToMove() == Color::White &&
          board.enPassantTargetSquare().isInvalid();
 }());

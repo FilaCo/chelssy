@@ -45,7 +45,7 @@ inline void expectMailboxMatchesPieceLists(const Board &board) {
       continue;
     }
     const auto piece = board.pieceAt(sqr);
-    if (piece == Piece::None) {
+    if (isNone(piece)) {
       continue;
     }
     ++occupiedTotal;
