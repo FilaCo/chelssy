@@ -64,8 +64,8 @@ TEST(BoardFromFenTest, startingPositionPieceCounts) {
 }
 
 TEST(BoardFromFenTest, fenFieldsReachBoard) {
-  // act
-  const auto board = boardFromFenStr("r3k3/8/8/8/4P3/8/8/4K2R b Kq e3 0 42");
+  // act — the d4 pawn can capture on e3, so the ep square is kept.
+  const auto board = boardFromFenStr("r3k3/8/8/8/3pP3/8/8/4K2R b Kq e3 0 42");
 
   // assert
   ASSERT_TRUE(board.has_value());
@@ -75,6 +75,15 @@ TEST(BoardFromFenTest, fenFieldsReachBoard) {
   EXPECT_EQ(Square::fromStr("e3"), board->enPassantTargetSquare());
   EXPECT_EQ(0, board->plyClock());
   EXPECT_EQ(42, board->moveCounter());
+}
+
+TEST(BoardFromFenTest, deadEnPassantSquareIsNormalizedAway) {
+  // act - no white pawn stands next to e5, so the ep square is dead.
+  const auto board = boardFromFenStr("4k3/8/8/4p3/8/8/8/4K3 w - e6 0 2");
+
+  // assert
+  ASSERT_TRUE(board.has_value());
+  EXPECT_TRUE(board->enPassantTargetSquare().isInvalid());
 }
 
 TEST(BoardSquaresTest, startingPositionWhitePawnSquares) {
@@ -161,9 +170,12 @@ INSTANTIATE_TEST_SUITE_P(
         BoardFromFenValidTestParam{"full_castling",
                                    "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"},
         BoardFromFenValidTestParam{"ep_white_to_move",
-                                   "4k3/8/8/4p3/8/8/8/4K3 w - e6 0 2"},
+                                   "4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 2"},
         BoardFromFenValidTestParam{"ep_black_to_move",
-                                   "4k3/8/8/8/4P3/8/8/4K3 b - e3 0 1"},
+                                   "4k3/8/8/8/3pP3/8/8/4K3 b - e3 0 1"},
+        // A dead ep square (no capturer) is normalized away, not rejected.
+        BoardFromFenValidTestParam{"ep_without_capturer",
+                                   "4k3/8/8/4p3/8/8/8/4K3 w - e6 0 2"},
         BoardFromFenValidTestParam{"ply_clock_max",
                                    "4k3/8/8/8/8/8/8/4K3 w - - 100 60"},
         BoardFromFenValidTestParam{"move_counter_min",

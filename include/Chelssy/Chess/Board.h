@@ -4,6 +4,7 @@
 #include "Detail/PieceLists.h"
 #include "Fen.h"
 #include "Types.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -64,10 +65,11 @@ struct Board {
       return std::unexpected(*err);
     }
 
-    return Board{
-        fen.sideToMove(),    fen.castlingAbility(), fen.enPassantTargetSquare(),
-        fen.halfMoveClock(), fen.fullMoveCounter(), mailbox,
-        pieceLists};
+    const auto epSqr =
+        normalizeEpSqr(fen.enPassantTargetSquare(), fen.sideToMove(), mailbox);
+    return Board{fen.sideToMove(),    fen.castlingAbility(), epSqr,
+                 fen.halfMoveClock(), fen.fullMoveCounter(), mailbox,
+                 pieceLists};
   }
 
   [[nodiscard]] constexpr auto sideToMove() const noexcept -> Color {
@@ -172,8 +174,10 @@ struct Board {
     }
 
     castlingRights_ &= castlingMasks[from.to8x8()] & castlingMasks[to.to8x8()];
-    epSqr_ = flag == PlyFlag::DoublePawnPush ? to.shiftedBackwards(sideToMove_)
-                                             : Square::none();
+    epSqr_ = flag == PlyFlag::DoublePawnPush &&
+                     hasEpCapturer(mailbox_, to, flip(sideToMove_))
+                 ? to.shiftedBackwards(sideToMove_)
+                 : Square::none();
     plyClock_ = ply.isCapture() || getKind(mover) == PieceKind::Pawn
                     ? 0
                     : static_cast<uint8_t>(plyClock_ + 1);
@@ -237,7 +241,8 @@ private:
 
   Color sideToMove_;
   CastlingRights castlingRights_;
-  /// En-passant target square.
+  /// En-passant target square. Canonical: set only when an enemy pawn
+  /// can pseudo-legally capture on it.
   Square epSqr_;
   /// @note 0..plyClockMax
   /// @note Resets on moving pawn or taking a piece.
@@ -403,6 +408,32 @@ private:
     }
 
     return std::nullopt;
+  }
+
+  /// Returns true when an en-passant capture is
+  /// pseudo-legally available.
+  [[nodiscard]] static constexpr auto
+  hasEpCapturer(const std::array<Piece, mailboxSize> &mailbox,
+                const Square pawnSqr, const Color capturer) noexcept -> bool {
+    constexpr std::array offsets{Square::east, Square::west};
+    const auto pawn = makePiece(capturer, PieceKind::Pawn);
+    return std::ranges::any_of(offsets, [&](const int8_t offset) -> bool {
+      const auto sqr = pawnSqr.shifted(offset);
+      return sqr.isValid() && mailbox[sqr.index()] == pawn;
+    });
+  }
+
+  /// Clears an en-passant square no enemy pawn can capture on (X-FEN
+  /// convention), keeping `epSqr_` canonical.
+  [[nodiscard]] static constexpr auto
+  normalizeEpSqr(const Square epSqr, const Color sideToMove,
+                 const std::array<Piece, mailboxSize> &mailbox) noexcept
+      -> Square {
+    if (epSqr.isInvalid()) {
+      return Square::none();
+    }
+    const auto pawnSqr = epSqr.shiftedBackwards(sideToMove);
+    return hasEpCapturer(mailbox, pawnSqr, sideToMove) ? epSqr : Square::none();
   }
 
   [[nodiscard]] static constexpr auto

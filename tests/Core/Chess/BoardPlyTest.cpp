@@ -18,11 +18,12 @@ static_assert([]() -> bool {
   Undo undo{};
 
   board.doPly(ply, undo);
+  // No black pawn can capture on e3, so no ep square is recorded.
   const auto applied =
       board.pieceAt(Square::fromStr("e4")) == Piece::WhitePawn &&
       board.isEmpty(Square::fromStr("e2")) &&
       board.sideToMove() == Color::Black &&
-      board.enPassantTargetSquare() == Square::fromStr("e3");
+      board.enPassantTargetSquare().isInvalid();
 
   board.undoPly(ply, undo);
   return applied && board.pieceAt(Square::fromStr("e2")) == Piece::WhitePawn &&
@@ -74,20 +75,27 @@ struct BoardPlyTest : testing::TestWithParam<PlyTestParam> {};
           .ply = Ply{Square::fromStr("g1"), Square::fromStr("f3"), Quiet},
           .fenAfter = "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq "
                       "- 1 1"},
-      PlyTestParam{.name = "double_push_sets_ep",
+      PlyTestParam{.name = "double_push_with_capturer_sets_ep",
+                   .fenBefore = "rnbqkbnr/ppp1pppp/8/8/3p4/8/PPPPPPPP/"
+                                "RNBQKBNR w KQkq - 0 2",
+                   .ply = Ply{Square::fromStr("e2"), Square::fromStr("e4"),
+                              DoublePawnPush},
+                   .fenAfter = "rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/"
+                               "RNBQKBNR b KQkq e3 0 2"},
+      PlyTestParam{.name = "double_push_without_capturer_leaves_ep_unset",
                    .fenBefore = Fen::startingPositionStr,
                    .ply = Ply{Square::fromStr("e2"), Square::fromStr("e4"),
                               DoublePawnPush},
                    .fenAfter =
                        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq "
-                       "e3 0 1"},
+                       "- 0 1"},
       PlyTestParam{
           .name = "black_ply_clears_ep_and_increments_move_counter",
           .fenBefore =
-              "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+              "rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 2",
           .ply = Ply{Square::fromStr("g8"), Square::fromStr("f6"), Quiet},
           .fenAfter =
-              "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2"},
+              "rnbqkb1r/ppp1pppp/5n2/8/3pP3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 3"},
       PlyTestParam{
           .name = "capture_resets_ply_clock",
           .fenBefore = "4k3/8/8/3p4/4N3/8/8/4K3 w - - 5 20",

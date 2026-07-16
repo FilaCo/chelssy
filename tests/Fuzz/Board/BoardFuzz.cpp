@@ -49,11 +49,28 @@ void checkMailboxMatchesPieceLists(const Board &board) {
   }
 }
 
-/// Every FEN field must reach the board unchanged.
+[[nodiscard]] auto expectedEpSqr(const Board &board, const Fen &fen) -> Square {
+  const auto epSqr = fen.enPassantTargetSquare();
+  if (epSqr.isInvalid()) {
+    return Square::none();
+  }
+  const auto capturer = makePiece(fen.sideToMove(), PieceKind::Pawn);
+  const auto pawnSqr = epSqr.shiftedBackwards(fen.sideToMove());
+  for (const auto offset : {Square::east, Square::west}) {
+    const auto sqr = pawnSqr.shifted(offset);
+    if (sqr.isValid() && board.pieceAt(sqr) == capturer) {
+      return epSqr;
+    }
+  }
+  return Square::none();
+}
+
+/// Every FEN field must reach the board unchanged, except the ep
+/// square, which is canonicalized.
 void checkBoardMatchesFen(const Board &board, const Fen &fen) {
   if (board.sideToMove() != fen.sideToMove() ||
       board.castlingRights() != fen.castlingAbility() ||
-      board.enPassantTargetSquare() != fen.enPassantTargetSquare() ||
+      board.enPassantTargetSquare() != expectedEpSqr(board, fen) ||
       board.plyClock() != fen.halfMoveClock() ||
       board.moveCounter() != fen.fullMoveCounter()) {
     __builtin_trap();
