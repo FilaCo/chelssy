@@ -42,6 +42,36 @@ enum class GenKind : uint8_t {
   All,
 };
 
+/// Whether the side to move's king is attacked.
+[[nodiscard]] constexpr auto isInCheck(const Board &board) noexcept -> bool {
+  const auto us = board.sideToMove();
+  const auto them = flip(us);
+  const auto kingSqr = board.kingSquare(us);
+
+  return isSquareAttacked(board, kingSqr, them);
+}
+
+/// Whether a pseudo-legal ply leaves the mover's own king out of check.
+///
+/// @pre `ply` is pseudo-legal for this position.
+/// @note `board` is mutated by the probe and restored exactly.
+/// @note Castling plies are accepted as fully legal - genCastlePlies already
+///       filters out illegal ones.
+[[nodiscard]] constexpr auto isLegal(Board &board, const Ply ply) noexcept
+    -> bool {
+  // pseudo-legal ply which castles is always legal
+  if (ply.isCastle()) {
+    return true;
+  }
+
+  const auto us = board.sideToMove();
+  Undo undo{};
+  board.doPly(ply, undo);
+  const auto isLegal = !isSquareAttacked(board, board.kingSquare(us), flip(us));
+  board.undoPly(ply, undo);
+  return isLegal;
+}
+
 namespace Detail {
 
 /// Number of promotion kinds (knight, bishop, rook, queen).
@@ -214,7 +244,7 @@ constexpr void genCastlePlies(const Board &board, const std::span<Ply> out,
 /// the filled prefix.
 ///
 /// Pseudo-legal means the mover's king may be left in check; the caller
-/// filters that out with doPly + isSquareAttacked + undoPly. Castles are
+/// filters that out with doPly + isLegal + undoPly. Castles are
 /// the exception: they are emitted fully legal, see genCastlePlies.
 ///
 /// @pre out.size() >= pliesPerPositionMax

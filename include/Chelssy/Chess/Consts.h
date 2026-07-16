@@ -4,6 +4,7 @@
 
 namespace Chelssy::Chess {
 
+constexpr uint8_t plyClockMax = 100;
 constexpr uint8_t chessboardSize = 64;
 constexpr uint8_t fileMax = 7;
 constexpr uint8_t rankMax = 7;

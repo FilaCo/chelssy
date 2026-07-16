@@ -540,6 +540,10 @@ struct Ply {
     return static_cast<Flag>(inner_ >> flagShift);
   }
 
+  [[nodiscard]] constexpr auto isCastle() const noexcept -> bool {
+    return (inner_ & castleBit) != 0;
+  }
+
   [[nodiscard]] constexpr auto isCapture() const noexcept -> bool {
     return (inner_ & captureBit) != 0;
   }
@@ -565,6 +569,7 @@ private:
   static constexpr uint8_t flagShift = 12;
   static constexpr uint8_t sqrMask = 0b11'1111;
   static constexpr uint8_t promoKindMask = 0b0011;
+  static constexpr auto castleBit = static_cast<uint16_t>(0b0010U << flagShift);
   static constexpr auto captureBit =
       static_cast<uint16_t>(0b0100U << flagShift);
   static constexpr auto promoBit = static_cast<uint16_t>(0b1000U << flagShift);
@@ -607,6 +612,19 @@ static_assert(Ply(Square::fromStr("e5"), Square::fromStr("d6"),
 static_assert(!Ply(Square::fromStr("e5"), Square::fromStr("d6"),
                    Ply::Flag::EnPassantCapture)
                    .isPromotion());
+
+static_assert(Ply(Square::fromStr("e1"), Square::fromStr("g1"),
+                  Ply::Flag::KingCastle)
+                  .isCastle());
+static_assert(Ply(Square::fromStr("e1"), Square::fromStr("c1"),
+                  Ply::Flag::QueenCastle)
+                  .isCastle());
+static_assert(!Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                   Ply::Flag::DoublePawnPush)
+                   .isCastle());
+static_assert(!Ply(Square::fromStr("e2"), Square::fromStr("e4"),
+                   Ply::Flag::Quiet)
+                   .isCastle());
 
 static_assert(Ply(Square::fromStr("a7"), Square::fromStr("a8"),
                   Ply::Flag::KnightPromo)

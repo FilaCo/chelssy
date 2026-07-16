@@ -232,7 +232,6 @@ struct Board {
   }
 
 private:
-  static constexpr uint8_t plyClockMax = 100;
   static constexpr uint16_t moveCounterMin = 1;
   static constexpr uint16_t moveCounterMax = 8850;
 
